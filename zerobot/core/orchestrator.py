@@ -1,3 +1,4 @@
+import json
 import shutil
 from pathlib import Path
 
@@ -41,10 +42,20 @@ class Orchestrator:
         if not (bot_path / "main.py").exists():
             shutil.copytree(TEMPLATE_PATH, bot_path, dirs_exist_ok=True)
 
-        # 5. تثبيت aiogram
+        # 5. تثبيت dependencies من manifest.json
+        manifest_path = bot_path / "manifest.json"
+
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+
+        dependencies = manifest.get("dependencies", [])
+
+        if not dependencies:
+            raise RuntimeError(f"No dependencies found in manifest for {bot_id}")
+
         await self.venv.install_requirements(
             bot_id,
-            ["aiogram==3.*"],
+            dependencies,
         )
 
         # 6. إنشاء bot record
