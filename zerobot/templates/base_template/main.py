@@ -1,32 +1,23 @@
-import asyncio
-import logging
 import os
 
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import CommandStart
+from aiohttp import web
 
 
-logging.basicConfig(level=logging.INFO)
-
-TOKEN = os.environ["BOT_TOKEN"]
-
-bot = Bot(token=TOKEN)
-dp = Dispatcher()
+routes = web.RouteTableDef()
 
 
-@dp.message(CommandStart())
-async def on_start(message: types.Message):
-    await message.answer("👋 Hello from your ZeroBot!")
+@routes.post("/webhook")
+async def webhook_handler(request):
+    data = await request.json()
+
+    print("Received update:", data)
+
+    return web.Response(text="ok")
 
 
-@dp.message()
-async def on_message(message: types.Message):
-    await message.answer(message.text or "")
+app = web.Application()
+app.add_routes(routes)
 
+port = int(os.getenv("BOT_PORT", 8080))
 
-async def main():
-    await dp.start_polling(bot)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+web.run_app(app, port=port)
