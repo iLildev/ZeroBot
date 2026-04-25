@@ -4,11 +4,17 @@ from sqlalchemy import select
 from database.engine import AsyncSessionLocal
 from database.models import Bot
 from core.delivery import DeliveryManager
+from core.limiter import RateLimiter
 from core.wake_buffer import wake_buffer
+from analytics.tracker import Tracker
+from hibernation.hibernator import Hibernator
 
 
 app = FastAPI(title="ZeroBot Gateway")
 delivery = DeliveryManager()
+limiter = RateLimiter()
+tracker = Tracker()
+hibernator = Hibernator()
 
 
 @app.get("/healthz")
@@ -34,9 +40,19 @@ async def handle_update(bot_id: str, request: Request):
 
         if bot.is_hibernated:
             await wake_buffer.add(bot_id, update)
-            # لاحقاً سنضيف:
-            # await orchestrator.wake_bot(bot_id)
-            return {"status": "buffered"}
+
+            # إيقاظ البوت
+            # await orchestrator.plant_bot(...)
+
+            return {"status": "waking up - Powered by @iLildev"}
+
+        # Rate limit
+        if not limiter.allow(bot_id):
+            return {"error": "rate limited - Powered by @iLildev"}
+
+        # سجل النشاط
+        tracker.track(bot_id)
+        hibernator.touch(bot_id)
 
         if bot.port is None:
             raise HTTPException(status_code=503, detail="Bot has no port assigned")
