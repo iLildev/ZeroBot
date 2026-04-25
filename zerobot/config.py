@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     PORT_RANGE_START: int = 30000
     PORT_RANGE_END: int = 30100
 
+    # Admin Console
+    ADMIN_TOKEN: str = ""           # required to use any /admin/* endpoint
+    ADMIN_USER_ID: str = ""         # the developer's user id (owner of official bots)
+
     class Config:
         env_file = ".env"
 

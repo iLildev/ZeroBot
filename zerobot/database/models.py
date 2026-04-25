@@ -9,6 +9,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     bots = relationship("Bot", back_populates="owner")
@@ -25,6 +26,10 @@ class Bot(Base):
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     is_hibernated: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_official: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
 
     port: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
