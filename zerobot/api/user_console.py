@@ -7,6 +7,7 @@ from database.engine import async_session_maker
 from database.models import Bot, User
 from database.wallet import WalletService
 from core.orchestrator import Orchestrator
+from events.publisher import fire
 
 
 app = FastAPI(title="ZeroBot User Console")
@@ -70,6 +71,7 @@ async def get_wallet(user_id: str, session: AsyncSession = Depends(get_session))
     if not user:
         session.add(User(id=user_id))
         await session.commit()
+        fire("user_registered", {"user_id": user_id, "source": "wallet"})
 
     wallet = await WalletService(session).get_wallet(user_id)
     return WalletOut(user_id=wallet.user_id, balance=wallet.balance)
@@ -88,10 +90,15 @@ async def topup_wallet(
     if not user:
         session.add(User(id=user_id))
         await session.commit()
+        fire("user_registered", {"user_id": user_id, "source": "topup"})
 
     service = WalletService(session)
     await service.add(user_id, body.amount)
     wallet = await service.get_wallet(user_id)
+    fire(
+        "wallet_topup",
+        {"user_id": user_id, "amount": body.amount, "balance": wallet.balance},
+    )
     return WalletOut(user_id=wallet.user_id, balance=wallet.balance)
 
 
@@ -114,6 +121,7 @@ async def create_bot(
     if not user:
         session.add(User(id=user_id))
         await session.commit()
+        fire("user_registered", {"user_id": user_id, "source": "create_bot"})
 
     existing = await session.get(Bot, body.bot_id)
     if existing:
@@ -131,6 +139,7 @@ async def create_bot(
         raise HTTPException(status_code=400, detail=str(e))
 
     bot = await session.get(Bot, body.bot_id)
+    fire("bot_created", {"bot_id": bot.id, "user_id": user_id})
     return _bot_out(bot)
 
 

@@ -13,6 +13,7 @@ from database.port_registry import Port
 from database.wallet import WalletService
 from core.orchestrator import Orchestrator
 from isolation.venv_manager import VenvManager
+from events.publisher import fire
 
 
 app = FastAPI(title="ZeroBot Admin Console")
@@ -222,6 +223,10 @@ async def grant_crystals(
     service = WalletService(session)
     await service.add(user_id, body.amount)
     wallet = await service.get_wallet(user_id)
+    fire(
+        "wallet_grant",
+        {"user_id": user_id, "amount": body.amount, "balance": wallet.balance},
+    )
     return WalletOut(user_id=user_id, balance=wallet.balance)
 
 
@@ -243,6 +248,10 @@ async def deduct_crystals(
         raise HTTPException(400, str(e))
 
     wallet = await service.get_wallet(user_id)
+    fire(
+        "wallet_deduct",
+        {"user_id": user_id, "amount": body.amount, "balance": wallet.balance},
+    )
     return WalletOut(user_id=user_id, balance=wallet.balance)
 
 
@@ -297,6 +306,7 @@ async def delete_user(user_id: str, session: AsyncSession = Depends(get_session)
 
     await session.delete(user)
     await session.commit()
+    fire("user_deleted", {"user_id": user_id, "bots_removed": len(bots)})
     return {"status": "deleted", "user_id": user_id, "bots_removed": len(bots)}
 
 
@@ -342,6 +352,7 @@ async def force_wake(bot_id: str, session: AsyncSession = Depends(get_session)):
     orchestrator = Orchestrator(session)
     await orchestrator.wake_bot(bot)
     await session.refresh(bot)
+    fire("bot_state_changed", {"bot_id": bot.id, "action": "woken"})
     return _bot_out(bot)
 
 
@@ -361,6 +372,7 @@ async def force_hibernate(bot_id: str, session: AsyncSession = Depends(get_sessi
     bot.is_hibernated = True
     bot.port = None
     await session.commit()
+    fire("bot_state_changed", {"bot_id": bot.id, "action": "hibernated"})
     return _bot_out(bot)
 
 
@@ -383,6 +395,7 @@ async def restart_bot(bot_id: str, session: AsyncSession = Depends(get_session))
 
     await orchestrator.wake_bot(bot)
     await session.refresh(bot)
+    fire("bot_state_changed", {"bot_id": bot.id, "action": "restarted"})
     return _bot_out(bot)
 
 
@@ -404,6 +417,7 @@ async def delete_bot(bot_id: str, session: AsyncSession = Depends(get_session)):
 
     await session.delete(bot)
     await session.commit()
+    fire("bot_deleted", {"bot_id": bot_id})
     return {"status": "deleted", "bot_id": bot_id}
 
 
@@ -494,6 +508,10 @@ async def create_official_bot(
     bot.description = body.description
     await session.commit()
 
+    fire(
+        "official_bot_created",
+        {"bot_id": bot.id, "name": body.name, "description": body.description},
+    )
     return _bot_out(bot)
 
 
