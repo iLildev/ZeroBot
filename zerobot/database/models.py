@@ -5,12 +5,17 @@ Each class maps 1:1 to a Postgres table and is wired up via SQLAlchemy 2.0's
 UTC so that queries are timezone-stable across hosts.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from zerobot.database.engine import Base
+
+
+def _utc_now() -> datetime:
+    """Return the current UTC time. Replaces the deprecated ``datetime.utcnow``."""
+    return datetime.now(UTC)
 
 
 class User(Base):
@@ -20,7 +25,7 @@ class User(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=_utc_now)
 
     # Reverse-relations populated by SQLAlchemy on attribute access.
     bots = relationship("Bot", back_populates="owner")
@@ -51,7 +56,7 @@ class Bot(Base):
     # Set while the bot is awake; ``None`` while hibernated.
     port: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=_utc_now)
 
     owner = relationship("User", back_populates="bots")
 

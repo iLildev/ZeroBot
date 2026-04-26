@@ -6,13 +6,18 @@ through three statuses: ``free`` → ``used`` (while a bot owns it) →
 immediately reuse the same socket) → ``free`` again.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import DateTime, Integer, String, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from zerobot.database.engine import Base
+
+
+def _utc_now() -> datetime:
+    """Return the current UTC time."""
+    return datetime.now(UTC)
 
 
 class Port(Base):
@@ -42,7 +47,7 @@ class PortManager:
 
         port.status = "used"
         port.bot_id = bot_id
-        port.last_used = datetime.utcnow()
+        port.last_used = _utc_now()
 
         await self.session.commit()
         return port.port_number
@@ -57,13 +62,13 @@ class PortManager:
 
         port.status = "cooldown"
         port.bot_id = None
-        port.last_used = datetime.utcnow()
+        port.last_used = _utc_now()
 
         await self.session.commit()
 
     async def cleanup(self) -> None:
         """Promote any cooldown ports older than 60s back to ``free``."""
-        threshold = datetime.utcnow() - timedelta(seconds=60)
+        threshold = _utc_now() - timedelta(seconds=60)
 
         result = await self.session.execute(
             select(Port).where(

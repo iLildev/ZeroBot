@@ -15,6 +15,8 @@ Optional env:
 """
 
 import asyncio
+import json
+import logging
 import os
 import sys
 
@@ -26,11 +28,16 @@ from aiogram.filters import BaseFilter, Command, CommandObject, CommandStart
 from aiogram.types import Message
 from aiohttp import web
 
+from zerobot.events.publisher import SIGNATURE_HEADER, verify_signature
+
+log = logging.getLogger(__name__)
+
 # ─────────────── Config ───────────────
 
 BOT_TOKEN = os.getenv("MANAGER_BOT_TOKEN", "").strip()
 ADMIN_CHAT_ID_RAW = os.getenv("MANAGER_ADMIN_CHAT_ID", "").strip()
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "").strip()
+EVENT_SHARED_SECRET = os.getenv("EVENT_SHARED_SECRET", "").strip()
 ADMIN_CONSOLE_URL = os.getenv("ADMIN_CONSOLE_URL", "http://127.0.0.1:8002")
 USER_CONSOLE_URL = os.getenv("USER_CONSOLE_URL", "http://127.0.0.1:8000")
 EVENT_PORT = int(os.getenv("MANAGER_EVENT_PORT", "8003"))
@@ -441,10 +448,23 @@ def _format_event(event: str, p: dict) -> str | None:
 
 
 async def handle_event(request: web.Request) -> web.Response:
-    """Receive an event from the platform and forward it to the admin chat."""
+    """Receive an event from the platform and forward it to the admin chat.
+
+    When ``EVENT_SHARED_SECRET`` is configured, every request must carry a
+    valid HMAC-SHA256 signature in the ``X-ZeroBot-Signature`` header
+    (``sha256=<hex>``). Unsigned requests are rejected with 401.
+    """
+    body = await request.read()
+
+    if EVENT_SHARED_SECRET:
+        sig = request.headers.get(SIGNATURE_HEADER, "")
+        if not verify_signature(EVENT_SHARED_SECRET, body, sig):
+            log.warning("rejected event from %s: bad signature", request.remote)
+            return web.json_response({"ok": False, "error": "bad signature"}, status=401)
+
     try:
-        data = await request.json()
-    except Exception:
+        data = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
         return web.json_response({"ok": False, "error": "invalid json"}, status=400)
 
     event = data.get("event", "")

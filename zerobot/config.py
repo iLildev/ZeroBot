@@ -8,7 +8,7 @@ Settings are parsed by ``pydantic-settings``; values can be overridden by an
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -33,10 +33,24 @@ class Settings(BaseSettings):
     ADMIN_TOKEN: str = ""  # required header value to call /admin/* routes
     ADMIN_USER_ID: str = ""  # the developer's user id (owner of official bots)
 
-    class Config:
-        """Pydantic-settings configuration."""
+    # ── Hibernation ────────────────────────────────────────────────────────
+    HIBERNATION_TIMEOUT: int = 1800  # seconds of inactivity before reaping
+    HIBERNATION_SWEEP: int = 30  # seconds between hibernator sweep cycles
 
-        env_file = ".env"
+    # ── Events (publisher → manager bot) ───────────────────────────────────
+    EVENT_SHARED_SECRET: str = ""  # HMAC-SHA256 secret; empty disables signing
+
+    # ── Builder Agent ──────────────────────────────────────────────────────
+    BUILDER_SESSION_DIR: str = "runtime_envs/builder_sessions"
+
+    # ── Sandbox resource limits (Linux only; ignored on platforms without
+    # the ``resource`` module). Set any value to 0 to disable that limit.
+    SANDBOX_CPU_SECONDS: int = 30  # max CPU seconds per bash invocation
+    SANDBOX_MEM_MB: int = 512  # max address-space (RSS) per process
+    SANDBOX_FILE_MB: int = 50  # max single-file size written by sandbox
+    SANDBOX_MAX_PROCS: int = 64  # max concurrent processes per sandbox call
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @field_validator("DATABASE_URL")
     @classmethod

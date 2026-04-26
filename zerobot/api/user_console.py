@@ -74,9 +74,32 @@ def _bot_out(bot: Bot) -> BotOut:
 
 
 @app.get("/healthz")
-async def healthz() -> dict[str, str]:
-    """Liveness probe."""
-    return {"status": "ok"}
+async def healthz() -> dict:
+    """Liveness + readiness probe.
+
+    Probes the database with a trivial ``SELECT 1``. Returns HTTP 503 when
+    the database is unreachable so an upstream load balancer can drop the
+    instance from rotation.
+    """
+    from sqlalchemy import text  # local import keeps module top clean
+
+    db_ok = True
+    db_error: str | None = None
+    try:
+        async with async_session_maker() as session:
+            await session.execute(text("SELECT 1"))
+    except Exception as exc:  # noqa: BLE001
+        db_ok = False
+        db_error = f"{type(exc).__name__}: {exc}"
+
+    body: dict = {
+        "status": "ok" if db_ok else "degraded",
+        "database": "ok" if db_ok else "unreachable",
+    }
+    if db_error:
+        body["error"] = db_error
+        raise HTTPException(status_code=503, detail=body)
+    return body
 
 
 # ─────────────── Wallet ───────────────

@@ -163,8 +163,32 @@ def _bot_out(bot: Bot) -> BotOut:
 
 @app.get("/healthz")
 async def healthz() -> dict:
-    """Liveness probe (also reports whether admin auth is configured)."""
-    return {"status": "ok", "admin_enabled": bool(settings.ADMIN_TOKEN)}
+    """Liveness + readiness probe.
+
+    Returns ``status: "ok"`` when the database is reachable. On failure
+    surfaces ``status: "degraded"`` and an HTTP 503 so process supervisors
+    know to restart or page.
+    """
+    from sqlalchemy import text  # local import keeps module top clean
+
+    db_ok = True
+    db_error: str | None = None
+    try:
+        async with async_session_maker() as session:
+            await session.execute(text("SELECT 1"))
+    except Exception as exc:  # noqa: BLE001
+        db_ok = False
+        db_error = f"{type(exc).__name__}: {exc}"
+
+    body: dict = {
+        "status": "ok" if db_ok else "degraded",
+        "database": "ok" if db_ok else "unreachable",
+        "admin_enabled": bool(settings.ADMIN_TOKEN),
+    }
+    if db_error:
+        body["error"] = db_error
+        raise HTTPException(status_code=503, detail=body)
+    return body
 
 
 # ═══════════════════════════ SYSTEM OVERVIEW ═══════════════════════════

@@ -1,0 +1,110 @@
+# ZeroBot — full local stack (postgres + every service).
+# Usage:
+#   cp .env.example .env && edit
+#   docker compose up --build
+#
+# Each service uses the same image, just with a different CMD.
+# The bootstrap one-shot runs the migrations / port seeding before anything
+# else starts (depends_on: condition: service_completed_successfully).
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: zerobot
+      POSTGRES_PASSWORD: zerobot
+      POSTGRES_DB: zerobot
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zerobot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  bootstrap:
+    build: .
+    image: zerobot:latest
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://zerobot:zerobot@db:5432/zerobot
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["python", "-m", "zerobot.main"]
+    restart: "no"
+
+  gateway:
+    image: zerobot:latest
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://zerobot:zerobot@db:5432/zerobot
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    command: ["uvicorn", "zerobot.core.gateway:app", "--host", "0.0.0.0", "--port", "8001"]
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+
+  user_console:
+    image: zerobot:latest
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://zerobot:zerobot@db:5432/zerobot
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    command: ["uvicorn", "zerobot.api.user_console:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+
+  admin_console:
+    image: zerobot:latest
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://zerobot:zerobot@db:5432/zerobot
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    command: ["uvicorn", "zerobot.api.admin_console:app", "--host", "0.0.0.0", "--port", "8002"]
+    ports:
+      - "8002:8002"
+
+  builder_bot:
+    image: zerobot:latest
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://zerobot:zerobot@db:5432/zerobot
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    command: ["python", "-m", "zerobot.bots.builder_bot.main"]
+    volumes:
+      - builder_sessions:/app/runtime_envs/builder_sessions
+
+  manager_bot:
+    image: zerobot:latest
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://zerobot:zerobot@db:5432/zerobot
+      ADMIN_CONSOLE_URL: http://admin_console:8002
+      USER_CONSOLE_URL: http://user_console:8000
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      admin_console:
+        condition: service_started
+    command: ["python", "-m", "zerobot.bots.manager_bot.main"]
+    ports:
+      - "8003:8003"
+
+volumes:
+  pgdata:
+  builder_sessions:

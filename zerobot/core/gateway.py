@@ -3,10 +3,20 @@
 The gateway is the only HTTP service Telegram talks to directly. It looks up
 the target bot, applies the rate limit, optionally wakes a hibernating bot,
 and forwards the update to the bot's local webhook port.
+
+Background tasks
+----------------
+On startup, the FastAPI lifespan hook launches :py:meth:`Hibernator.monitor`
+so idle bots are reaped automatically. The task is cancelled on shutdown.
 """
 
+import asyncio
+import contextlib
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from zerobot.analytics.tracker import Tracker
 from zerobot.core.delivery import DeliveryManager
@@ -17,17 +27,57 @@ from zerobot.database.engine import async_session_maker
 from zerobot.database.models import Bot
 from zerobot.hibernation.hibernator import Hibernator
 
-app = FastAPI(title="ZeroBot Gateway")
+log = logging.getLogger(__name__)
+
 delivery = DeliveryManager()
 limiter = RateLimiter()
 tracker = Tracker()
 hibernator = Hibernator()
 
 
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Start background watchdogs on app boot; cancel them on shutdown."""
+    monitor_task = asyncio.create_task(hibernator.monitor(async_session_maker))
+    log.info("gateway: lifespan started, hibernator monitor task launched")
+    try:
+        yield
+    finally:
+        monitor_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await monitor_task
+        log.info("gateway: lifespan shutdown complete")
+
+
+app = FastAPI(title="ZeroBot Gateway", lifespan=lifespan)
+
+
 @app.get("/healthz")
-async def healthz() -> dict[str, str]:
-    """Liveness probe."""
-    return {"status": "ok"}
+async def healthz() -> dict:
+    """Liveness + readiness probe.
+
+    Returns ``status: "ok"`` when the database is reachable and
+    ``status: "degraded"`` (HTTP 503) when it is not. The Hibernator monitor
+    state is also surfaced so operators can spot a stuck watchdog.
+    """
+    db_ok = True
+    db_error: str | None = None
+    try:
+        async with async_session_maker() as session:
+            await session.execute(text("SELECT 1"))
+    except Exception as exc:  # noqa: BLE001
+        db_ok = False
+        db_error = f"{type(exc).__name__}: {exc}"
+
+    body: dict = {
+        "status": "ok" if db_ok else "degraded",
+        "database": "ok" if db_ok else "unreachable",
+        "tracked_bots": len(hibernator.last_seen),
+    }
+    if db_error:
+        body["error"] = db_error
+        raise HTTPException(status_code=503, detail=body)
+    return body
 
 
 @app.post("/webhook/{bot_id}")

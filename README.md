@@ -160,10 +160,44 @@ absolute paths, parent escapes, and symlinks that leave the workspace.
 ## Development
 
 ```bash
-# Lint + format
-ruff check zerobot
-ruff format zerobot
+# Install runtime + dev dependencies (ruff, pytest, pre-commit).
+make install
+
+# Lint, format-check, and run the test suite — same gate as CI.
+make check
+
+# Or invoke the underlying tools directly:
+ruff check zerobot tests
+ruff format zerobot tests
+pytest
+
+# Optional: install the git hook so commits auto-format before they land.
+pre-commit install
 ```
+
+Continuous integration runs `make check` on Python 3.11 and 3.12 for every
+push and PR (`.github/workflows/ci.yml`).
+
+### Run the full stack with Docker
+
+A `Dockerfile` and `docker-compose.yml` are provided for one-command bring-up.
+Compose starts Postgres, runs the bootstrap migration as a one-shot, then
+boots all five services (gateway, user console, admin console, builder bot,
+manager bot):
+
+```bash
+cp .env.example .env  # fill in MANAGER_BOT_TOKEN, BUILDER_BOT_TOKEN, etc.
+docker compose up --build
+```
+
+Builder Agent sessions and per-user workspaces are persisted in the named
+volume `builder_sessions`.
+
+### Security
+
+See [`SECURITY.md`](SECURITY.md) for the vulnerability-reporting process and
+operator-side hardening recommendations (admin token, event signing,
+sandbox limits, TLS termination).
 
 See `CONTRIBUTING.md` for the full contributor guide.
 
@@ -191,6 +225,21 @@ See `CONTRIBUTING.md` for the full contributor guide.
 1. انسخ `.env.example` إلى `.env` واملأ القيم.
 2. شغّل `python -m zerobot.main` لإنشاء قاعدة البيانات وتسجيل المنافذ.
 3. ابدأ كلّ خدمة في عمليّة منفصلة كما هو موضّح في القسم الإنجليزي أعلاه.
+   أو شغّل المنصّة بكاملها بأمر واحد عبر Docker:
+   `cp .env.example .env && docker compose up --build`.
+
+### التطوير والاختبار
+
+- `make install` لتثبيت كل المتطلّبات (تشغيل + تطوير).
+- `make check` يشغّل فحص التنسيق والاختبارات (نفس بوّابة CI).
+- مجموعة اختبارات `pytest` تغطّي: محدّد المعدّل، مخزن الإيقاظ،
+  الصندوق الرملي لـ Builder، توقيع الأحداث (HMAC)، تخزين جلسات Builder
+  على القرص، ومراقب السبات.
+
+### الأمان
+
+ملف `SECURITY.md` يصف كيفية الإبلاغ عن الثغرات وتوصيات التشغيل الآمن
+(توكن المسؤول، توقيع الأحداث، حدود الصندوق الرملي، إنهاء TLS).
 
 ---
 

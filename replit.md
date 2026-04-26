@@ -30,11 +30,15 @@ pyproject.toml       — project metadata + ruff config
 
 ## Key commands
 
-- `pip install -e ".[dev]"` — install runtime + dev dependencies (editable)
+- `make install` (or `pip install -e ".[dev]"`) — install runtime + dev deps
+- `make check` — run lint + format-check + tests (the CI gate)
+- `make test` (or `pytest`) — run the test suite (`tests/` at the repo root)
 - `python -m zerobot.main` — bootstrap DB, run additive migrations, seed ports
 - `python -m zerobot.agents.cli_test` — interactive Builder Agent REPL
-- `ruff check zerobot` — lint the codebase
-- `ruff format zerobot` — auto-format the codebase
+- `ruff check zerobot tests` — lint the codebase
+- `ruff format zerobot tests` — auto-format the codebase
+- `docker compose up --build` — bring up the full stack (Postgres + 5 services)
+- `pre-commit install` — wire up the auto-formatting git hook
 
 ### Running the services
 

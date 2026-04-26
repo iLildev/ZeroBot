@@ -4,7 +4,8 @@ Each user gets an isolated directory under
 ``runtime_envs/builder_sessions/{user_id}/workspace`` where the agent can
 read, write, and execute commands. All file operations validate that the
 requested path stays inside the workspace; the bash tool runs with ``cwd``
-pinned to the workspace and a minimal environment.
+pinned to the workspace, a minimal environment, and (on Linux) hard
+``setrlimit`` caps on CPU time, memory, file size, and process count.
 
 This is filesystem-level isolation, not VM-grade. It is sufficient for
 trusted users (the platform owner + invited collaborators). For untrusted
@@ -20,6 +21,11 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+try:
+    import resource  # type: ignore[import-not-found]
+except ImportError:  # pragma: no cover - non-Unix platforms
+    resource = None  # type: ignore[assignment]
+
 DEFAULT_BASE_DIR = Path("runtime_envs/builder_sessions")
 MAX_OUTPUT_BYTES = 8_192  # truncate stdout / stderr to this many bytes
 MAX_FILE_READ_BYTES = 64_000  # refuse to read files larger than this
@@ -29,6 +35,47 @@ HARD_BASH_TIMEOUT = 120  # absolute upper bound
 # Only forward these env vars from the host to bash subprocesses, so the
 # agent cannot trivially read API keys or other secrets out of os.environ.
 SAFE_ENV_KEYS = {"LANG", "LC_ALL", "TERM"}
+
+
+@dataclass
+class ResourceLimits:
+    """Hard ceilings applied to every subprocess via ``resource.setrlimit``.
+
+    Set any field to 0 to skip enforcing that limit. All limits are
+    silently ignored on platforms without the ``resource`` module
+    (Windows). Defaults are conservative; tune via env vars on the
+    ``Settings`` model.
+    """
+
+    cpu_seconds: int = 30
+    address_space_mb: int = 512
+    file_size_mb: int = 50
+    max_processes: int = 64
+
+    def apply(self) -> None:
+        """Install the limits in the calling (forked) child process."""
+        if resource is None:
+            return
+        if self.cpu_seconds > 0:
+            with contextlib.suppress(ValueError, OSError):
+                resource.setrlimit(
+                    resource.RLIMIT_CPU,
+                    (self.cpu_seconds, self.cpu_seconds),
+                )
+        if self.address_space_mb > 0:
+            cap = self.address_space_mb * 1024 * 1024
+            with contextlib.suppress(ValueError, OSError):
+                resource.setrlimit(resource.RLIMIT_AS, (cap, cap))
+        if self.file_size_mb > 0:
+            cap = self.file_size_mb * 1024 * 1024
+            with contextlib.suppress(ValueError, OSError):
+                resource.setrlimit(resource.RLIMIT_FSIZE, (cap, cap))
+        if self.max_processes > 0 and hasattr(resource, "RLIMIT_NPROC"):
+            with contextlib.suppress(ValueError, OSError):
+                resource.setrlimit(
+                    resource.RLIMIT_NPROC,
+                    (self.max_processes, self.max_processes),
+                )
 
 
 @dataclass
@@ -64,9 +111,14 @@ class SandboxError(Exception):
 class SandboxManager:
     """Coordinator for per-user workspaces and the operations on them."""
 
-    def __init__(self, base_dir: Path | str | None = None) -> None:
+    def __init__(
+        self,
+        base_dir: Path | str | None = None,
+        limits: ResourceLimits | None = None,
+    ) -> None:
         self.base_dir = Path(base_dir) if base_dir else DEFAULT_BASE_DIR
         self.base_dir.mkdir(parents=True, exist_ok=True)
+        self.limits = limits or ResourceLimits()
 
     # ── workspace lifecycle ─────────────────────────────────────────────────
 
@@ -167,8 +219,10 @@ class SandboxManager:
     ) -> BashResult:
         """Execute *command* inside the user's workspace.
 
-        ``cwd`` is pinned to the workspace and the environment is whittled
-        down to a minimal set so the agent can't trivially read host secrets.
+        ``cwd`` is pinned to the workspace, the environment is whittled
+        down to a minimal set so the agent can't trivially read host
+        secrets, and ``resource.setrlimit`` is installed via ``preexec_fn``
+        on Linux to cap CPU / memory / file size / number of processes.
         """
         if not command or not command.strip():
             raise SandboxError("empty command")
@@ -186,12 +240,17 @@ class SandboxManager:
             }
         )
 
+        # ``preexec_fn`` runs in the forked child, before exec(). It installs
+        # the rlimits so the kernel kills the process if it overruns.
+        preexec = self.limits.apply if resource is not None else None
+
         proc = await asyncio.create_subprocess_shell(
             command,
             cwd=str(ws),
             env=env,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            preexec_fn=preexec,
         )
         timed_out = False
         try:
