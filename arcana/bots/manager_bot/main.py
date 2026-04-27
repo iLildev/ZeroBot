@@ -21,11 +21,16 @@ import os
 import sys
 
 import httpx
-from aiogram import Bot, Dispatcher, Router
+from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import BaseFilter, Command, CommandObject, CommandStart
-from aiogram.types import Message
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 from aiohttp import web
 
 from arcana.bots.middleware import ThrottlingMiddleware, build_error_router
@@ -86,10 +91,19 @@ dp.include_router(router)
 
 
 class AdminFilter(BaseFilter):
-    """Allow only the configured admin chat to invoke commands."""
+    """Allow only the configured admin chat to invoke commands.
 
-    async def __call__(self, message: Message) -> bool:
-        return message.chat.id == ADMIN_CHAT_ID
+    Works for both ``Message`` updates (regular slash-commands) and
+    ``CallbackQuery`` updates (inline-keyboard taps), since the user
+    pagination flow uses inline buttons that fire callbacks rather
+    than messages.
+    """
+
+    async def __call__(self, event: Message | CallbackQuery) -> bool:
+        if isinstance(event, CallbackQuery):
+            chat = event.message.chat if event.message else None
+            return chat is not None and chat.id == ADMIN_CHAT_ID
+        return event.chat.id == ADMIN_CHAT_ID
 
 
 admin_only = AdminFilter()
@@ -131,7 +145,7 @@ async def cmd_start(m: Message):
         "/stats — system overview\n"
         "/ports — port registry summary\n\n"
         "<b>Users:</b>\n"
-        "/users — list users\n"
+        "/users [search] — paginated list (tap a row for details)\n"
         "/user <code>&lt;id&gt;</code> — user details\n"
         "/grant <code>&lt;user&gt; &lt;amt&gt;</code>\n"
         "/deduct <code>&lt;user&gt; &lt;amt&gt;</code>\n"
@@ -147,7 +161,11 @@ async def cmd_start(m: Message):
         "/wake <code>&lt;bot&gt;</code> · /hibernate <code>&lt;bot&gt;</code> · "
         "/restart <code>&lt;bot&gt;</code>\n\n"
         "<b>Official:</b>\n"
-        "/official — list official bots" + FOOTER
+        "/official — list official bots\n\n"
+        "<b>Customization:</b>\n"
+        "/getwelcome — show current /start welcome message\n"
+        "/setwelcome <code>&lt;text&gt;</code> — set custom welcome message\n"
+        "/clearwelcome — revert to default welcome message" + FOOTER
     )
 
 
@@ -162,7 +180,11 @@ async def cmd_stats(m: Message):
     s = r.json()
     await m.answer(
         f"📊 <b>System Stats</b>\n\n"
-        f"👥 Users: <b>{s['users_total']}</b>\n"
+        f"👥 Users: <b>{s['users_total']}</b> "
+        f"(verified {s.get('users_verified', 0)}, "
+        f"blocked {s.get('users_blocked', 0)})\n"
+        f"📈 Signups: today <b>{s.get('users_today', 0)}</b> · "
+        f"7d <b>{s.get('users_this_week', 0)}</b>\n"
         f"🤖 Bots: <b>{s['bots_total']}</b> "
         f"(active {s['bots_active']}, hibernated {s['bots_hibernated']}, "
         f"official {s['bots_official']})\n"
@@ -190,28 +212,169 @@ async def cmd_ports(m: Message):
     )
 
 
-@router.message(Command("users"), admin_only)
-async def cmd_users(m: Message):
-    """List the first 30 users with their bot counts."""
-    r = await admin_http.get("/admin/users")
-    if r.status_code != 200:
-        await m.answer(await _api_error_text(r))
-        return
+# ─────────────── /users (paginated) ───────────────
 
-    users = r.json()
-    if not users:
-        await m.answer("No users yet" + FOOTER)
-        return
+USERS_PAGE_SIZE = 10
 
-    lines = ["👥 <b>Users</b> (" + str(len(users)) + ")\n"]
-    for u in users[:30]:
-        admin_tag = " 👑" if u["is_admin"] else ""
+
+def _render_users_page(page: dict, search: str | None) -> tuple[str, InlineKeyboardMarkup]:
+    """Build the text + inline keyboard for one page of the user list.
+
+    The keyboard layout is two columns of "user-pick" buttons (so each
+    row is tappable to drill into the user) followed by a final ◀ ▶
+    navigation row. Page numbers in the callback data are 0-indexed.
+    """
+    items = page.get("items", [])
+    total = page.get("total", 0)
+    limit = page.get("limit", USERS_PAGE_SIZE) or USERS_PAGE_SIZE
+    offset = page.get("offset", 0)
+    page_idx = offset // limit if limit else 0
+    page_count = (total + limit - 1) // limit if limit else 1
+
+    header = (
+        f"👥 <b>Users</b> — page {page_idx + 1}/{max(page_count, 1)} "
+        f"(total {total}"
+    )
+    if search:
+        header += f", filter: <code>{search}</code>"
+    header += ")\n"
+
+    if not items:
+        return (header + "\n(no matches)" + FOOTER, InlineKeyboardMarkup(inline_keyboard=[]))
+
+    lines = [header]
+    rows: list[list[InlineKeyboardButton]] = []
+    for u in items:
+        admin_tag = " 👑" if u.get("is_admin") else ""
+        blocked_tag = " 🚫" if u.get("is_blocked") else ""
+        verified_tag = " ✅" if u.get("phone_verified") else ""
         lines.append(
-            f"• <code>{u['id']}</code>{admin_tag} — {u['bot_count']} bots · {u['balance']} 💎"
+            f"• <code>{u['id']}</code>{admin_tag}{verified_tag}{blocked_tag} "
+            f"— {u['bot_count']} 🤖 · {u['balance']} 💎"
         )
-    if len(users) > 30:
-        lines.append(f"\n…and {len(users) - 30} more")
-    await m.answer("\n".join(lines) + FOOTER)
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"👤 {u['id']}",
+                    callback_data=f"u:show:{u['id']}",
+                )
+            ]
+        )
+
+    # Navigation row — show ◀ if not on first page, ▶ if more pages exist.
+    nav: list[InlineKeyboardButton] = []
+    search_tag = search or "_"  # callback data must be non-empty
+    if page_idx > 0:
+        nav.append(
+            InlineKeyboardButton(
+                text="◀ Prev",
+                callback_data=f"u:page:{page_idx - 1}:{search_tag}",
+            )
+        )
+    if page_idx + 1 < page_count:
+        nav.append(
+            InlineKeyboardButton(
+                text="Next ▶",
+                callback_data=f"u:page:{page_idx + 1}:{search_tag}",
+            )
+        )
+    if nav:
+        rows.append(nav)
+
+    return ("\n".join(lines) + FOOTER, InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+async def _fetch_users_page(page_idx: int, search: str | None) -> dict | None:
+    """Hit the admin console for one page; return ``None`` on transport error."""
+    params: dict = {"limit": USERS_PAGE_SIZE, "offset": page_idx * USERS_PAGE_SIZE}
+    if search and search != "_":
+        params["search"] = search
+    r = await admin_http.get("/admin/users", params=params)
+    if r.status_code != 200:
+        return None
+    return r.json()
+
+
+@router.message(Command("users"), admin_only)
+async def cmd_users(m: Message, command: CommandObject):
+    """List users with pagination. Optional argument filters by id substring."""
+    search = (command.args or "").strip() or None
+    page = await _fetch_users_page(0, search)
+    if page is None:
+        await m.answer("❌ Could not reach admin console" + FOOTER)
+        return
+
+    text, kb = _render_users_page(page, search)
+    await m.answer(text, reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("u:page:"), admin_only)
+async def cb_users_page(call: CallbackQuery):
+    """Navigate to a different page of the user list."""
+    parts = (call.data or "").split(":", 3)
+    # Format: u:page:<idx>:<search>
+    if len(parts) < 4:
+        await call.answer()
+        return
+    try:
+        page_idx = int(parts[2])
+    except ValueError:
+        await call.answer("Bad page index", show_alert=True)
+        return
+    search = parts[3] if parts[3] != "_" else None
+
+    page = await _fetch_users_page(page_idx, search)
+    if page is None:
+        await call.answer("Admin console unreachable", show_alert=True)
+        return
+
+    text, kb = _render_users_page(page, search)
+    if call.message:
+        try:
+            await call.message.edit_text(text, reply_markup=kb)
+        except Exception:  # noqa: BLE001
+            await call.message.answer(text, reply_markup=kb)
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("u:show:"), admin_only)
+async def cb_user_show(call: CallbackQuery):
+    """Drill into one user's full detail card from a /users tap."""
+    user_id = (call.data or "").removeprefix("u:show:")
+    if not user_id:
+        await call.answer()
+        return
+
+    r = await admin_http.get(f"/admin/users/{user_id}")
+    if r.status_code != 200:
+        await call.answer("User not found", show_alert=True)
+        return
+
+    u = r.json()
+    bots_text = (
+        "\n".join(
+            f"  • <code>{b['id']}</code> — "
+            f"{'🟢 active' if b['is_active'] else '😴 hibernated'}"
+            f"{' 👑' if b['is_official'] else ''}"
+            for b in u["bots"]
+        )
+        or "  (no bots)"
+    )
+    phone_status = "✅" if u.get("phone_verified") else "❌"
+    session_status = "🔗" if u.get("telegram_session_linked") else "—"
+    quota_text = u.get("bot_quota") if u.get("bot_quota") is not None else "default"
+
+    text = (
+        f"👤 <b>User</b> <code>{u['id']}</code>{' 👑' if u['is_admin'] else ''}\n"
+        f"💎 Balance: <b>{u['balance']}</b>\n"
+        f"📱 Phone: {phone_status}  ·  🔌 MTProto: {session_status}  ·  "
+        f"🎫 Quota: <b>{quota_text}</b>\n"
+        f"📅 Created: {u['created_at']}\n\n"
+        f"<b>Bots:</b>\n{bots_text}" + FOOTER
+    )
+    if call.message:
+        await call.message.answer(text)
+    await call.answer()
 
 
 @router.message(Command("user"), admin_only)
@@ -495,6 +658,77 @@ async def cmd_official(m: Message):
         state = "🟢" if b["is_active"] else "😴"
         lines.append(f"{state} <code>{b['id']}</code> — {b['name'] or '—'}")
     await m.answer("\n".join(lines) + FOOTER)
+
+
+# ─────────────── Welcome message customization ───────────────
+
+
+WELCOME_KEY = "welcome_message"
+
+
+@router.message(Command("getwelcome"), admin_only)
+async def cmd_get_welcome(m: Message):
+    """Show the current custom welcome prepended to /start in the Builder Bot."""
+    r = await admin_http.get(f"/admin/settings/{WELCOME_KEY}")
+    if r.status_code == 404:
+        await m.answer(
+            "ℹ️ No custom welcome message set.\n"
+            "The default Builder Bot /start card is shown to users." + FOOTER
+        )
+        return
+    if r.status_code != 200:
+        await m.answer(await _api_error_text(r))
+        return
+    data = r.json()
+    await m.answer(
+        "📜 <b>Current welcome message</b>\n\n"
+        f"{data.get('value', '')}\n\n"
+        f"<i>Updated: {data.get('updated_at', '—')}</i>" + FOOTER
+    )
+
+
+@router.message(Command("setwelcome"), admin_only)
+async def cmd_set_welcome(m: Message, command: CommandObject):
+    """Set / replace the custom welcome message shown on /start.
+
+    Stored as a platform setting on the admin console; the Builder Bot
+    reads it on every /start so changes take effect immediately, with
+    no restart required.
+    """
+    text = (command.args or "").strip()
+    if not text:
+        await m.answer(
+            "Usage: <code>/setwelcome &lt;message&gt;</code>\n\n"
+            "The message is prepended to the default /start card. "
+            "HTML formatting is allowed." + FOOTER
+        )
+        return
+
+    r = await admin_http.put(
+        f"/admin/settings/{WELCOME_KEY}",
+        json={"value": text},
+    )
+    if r.status_code not in (200, 201):
+        await m.answer(await _api_error_text(r))
+        return
+
+    await m.answer(
+        "✅ Welcome message updated. "
+        "It will appear on the next /start in the Builder Bot." + FOOTER
+    )
+
+
+@router.message(Command("clearwelcome"), admin_only)
+async def cmd_clear_welcome(m: Message):
+    """Remove the custom welcome message and revert to the default /start."""
+    r = await admin_http.delete(f"/admin/settings/{WELCOME_KEY}")
+    if r.status_code == 404:
+        await m.answer("ℹ️ No custom welcome message was set." + FOOTER)
+        return
+    if r.status_code not in (200, 204):
+        await m.answer(await _api_error_text(r))
+        return
+    await m.answer("🧹 Custom welcome cleared. Default /start restored." + FOOTER)
 
 
 # ─────────────── Event listener ───────────────

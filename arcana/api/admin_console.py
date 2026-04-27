@@ -9,9 +9,11 @@ import contextlib
 import shutil
 from typing import Annotated
 
+from datetime import UTC, datetime, timedelta
+
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from arcana.config import settings
@@ -30,6 +32,12 @@ from arcana.identity import (
     unlink_phone,
 )
 from arcana.isolation.venv_manager import VenvManager
+from arcana.services.platform_settings import (
+    delete_setting,
+    get_setting,
+    list_settings,
+    set_setting,
+)
 
 app = FastAPI(title="Arcana Admin Console")
 
@@ -87,6 +95,17 @@ class UserOut(BaseModel):
     created_at: str | None
     phone_verified: bool = False
     bot_quota: int | None = None
+    is_blocked: bool = False
+    blocked_at: str | None = None
+
+
+class UserListPage(BaseModel):
+    """Paginated user list returned by ``GET /admin/users``."""
+
+    items: list[UserOut]
+    total: int
+    limit: int
+    offset: int
 
 
 class UserDetailOut(BaseModel):
@@ -132,6 +151,10 @@ class StatsOut(BaseModel):
     """Aggregate platform stats reported by ``GET /admin/stats``."""
 
     users_total: int
+    users_verified: int = 0
+    users_blocked: int = 0
+    users_today: int = 0
+    users_this_week: int = 0
     bots_total: int
     bots_active: int
     bots_hibernated: int
@@ -141,6 +164,21 @@ class StatsOut(BaseModel):
     ports_free: int
     ports_cooldown: int
     crystals_in_circulation: int
+
+
+class SettingOut(BaseModel):
+    """A single platform-setting row returned by the settings endpoints."""
+
+    key: str
+    value: str | None
+    updated_at: str | None = None
+    updated_by: str | None = None
+
+
+class SettingIn(BaseModel):
+    """Request body for ``PUT /admin/settings/{key}``."""
+
+    value: str
 
 
 class PortOut(BaseModel):
@@ -228,13 +266,34 @@ async def healthz() -> dict:
 
 @app.get("/admin/stats", response_model=StatsOut, dependencies=[AdminGuard])
 async def system_stats(session: AsyncSession = Depends(get_session)):
-    """Return platform-wide counters (users, bots, ports, crystals)."""
+    """Return platform-wide counters (users, bots, ports, crystals).
+
+    Wave 2 added the verified / blocked / today / this-week breakdowns
+    so the Manager Bot can show growth at a glance without an extra
+    round-trip per metric.
+    """
 
     async def count(stmt):
         return (await session.execute(stmt)).scalar() or 0
 
+    now = datetime.now(UTC)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = today_start - timedelta(days=7)
+
     return StatsOut(
         users_total=await count(select(func.count(User.id))),
+        users_verified=await count(
+            select(func.count(User.id)).where(User.phone_verified_at.is_not(None))
+        ),
+        users_blocked=await count(
+            select(func.count(User.id)).where(User.is_blocked.is_(True))
+        ),
+        users_today=await count(
+            select(func.count(User.id)).where(User.created_at >= today_start)
+        ),
+        users_this_week=await count(
+            select(func.count(User.id)).where(User.created_at >= week_start)
+        ),
         bots_total=await count(select(func.count(Bot.id))),
         bots_active=await count(select(func.count(Bot.id)).where(Bot.is_active.is_(True))),
         bots_hibernated=await count(select(func.count(Bot.id)).where(Bot.is_hibernated.is_(True))),
@@ -252,19 +311,49 @@ async def system_stats(session: AsyncSession = Depends(get_session)):
 # ═══════════════════════════ USERS ═══════════════════════════
 
 
-@app.get("/admin/users", response_model=list[UserOut], dependencies=[AdminGuard])
-async def list_users(session: AsyncSession = Depends(get_session)):
-    """Return every user with their bot count and crystal balance."""
-    users = (await session.execute(select(User).order_by(User.created_at))).scalars().all()
-    out: list[UserOut] = []
-    wallet_service = WalletService(session)
+@app.get("/admin/users", response_model=UserListPage, dependencies=[AdminGuard])
+async def list_users(
+    session: AsyncSession = Depends(get_session),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    search: str | None = Query(
+        None,
+        description="Case-insensitive substring match on user id (Wave 2).",
+    ),
+):
+    """Return a paginated page of users with their bot counts and balances.
 
+    Wave 2 changed the response shape from a bare ``list`` to a
+    ``UserListPage`` so the Manager Bot can paginate the table without
+    a separate /count call. Defaults preserve backward-compat for any
+    caller that hits ``/admin/users`` with no query string (50 rows from
+    offset 0). The optional ``search`` filter does a case-insensitive
+    substring match on the user id, useful when the admin only knows the
+    Telegram numeric prefix.
+    """
+    base = select(User)
+    if search:
+        like = f"%{search.lower()}%"
+        base = base.where(func.lower(User.id).like(like))
+
+    total = (
+        await session.execute(select(func.count()).select_from(base.subquery()))
+    ).scalar() or 0
+
+    users = (
+        await session.execute(
+            base.order_by(User.created_at).limit(limit).offset(offset)
+        )
+    ).scalars().all()
+
+    items: list[UserOut] = []
+    wallet_service = WalletService(session)
     for u in users:
         bot_count = (
             await session.execute(select(func.count(Bot.id)).where(Bot.user_id == u.id))
         ).scalar() or 0
         wallet = await wallet_service.get_wallet(u.id)
-        out.append(
+        items.append(
             UserOut(
                 id=u.id,
                 is_admin=bool(u.is_admin),
@@ -273,9 +362,11 @@ async def list_users(session: AsyncSession = Depends(get_session)):
                 created_at=u.created_at.isoformat() if u.created_at else None,
                 phone_verified=u.phone_verified_at is not None,
                 bot_quota=u.bot_quota,
+                is_blocked=bool(u.is_blocked),
+                blocked_at=u.blocked_at.isoformat() if u.blocked_at else None,
             )
         )
-    return out
+    return UserListPage(items=items, total=total, limit=limit, offset=offset)
 
 
 @app.get("/admin/users/{user_id}", response_model=UserDetailOut, dependencies=[AdminGuard])
@@ -743,3 +834,93 @@ async def force_release_port(port_number: int, session: AsyncSession = Depends(g
     port.last_used = None
     await session.commit()
     return {"port_number": port_number, "status": "free"}
+
+
+# ═══════════════════════════ PLATFORM SETTINGS ═══════════════════════════
+
+
+@app.get(
+    "/admin/settings",
+    response_model=list[SettingOut],
+    dependencies=[AdminGuard],
+)
+async def list_platform_settings(session: AsyncSession = Depends(get_session)):
+    """Return every stored platform setting (Wave 2)."""
+    rows = await list_settings(session)
+    # ``list_settings`` returns ``{key: value}``; we re-fetch to surface
+    # the audit metadata (who/when changed it).
+    from arcana.database.models import PlatformSetting  # local import keeps top clean
+
+    full = (await session.execute(select(PlatformSetting))).scalars().all()
+    by_key = {row.key: row for row in full}
+    return [
+        SettingOut(
+            key=k,
+            value=v,
+            updated_at=by_key[k].updated_at.isoformat() if by_key[k].updated_at else None,
+            updated_by=by_key[k].updated_by,
+        )
+        for k, v in rows.items()
+    ]
+
+
+@app.get(
+    "/admin/settings/{key}",
+    response_model=SettingOut,
+    dependencies=[AdminGuard],
+)
+async def get_platform_setting(key: str, session: AsyncSession = Depends(get_session)):
+    """Return a single setting (or ``404`` if it has never been set)."""
+    from arcana.database.models import PlatformSetting
+
+    row = await session.get(PlatformSetting, key)
+    if row is None:
+        raise HTTPException(404, f"Setting {key!r} not found")
+    return SettingOut(
+        key=row.key,
+        value=row.value,
+        updated_at=row.updated_at.isoformat() if row.updated_at else None,
+        updated_by=row.updated_by,
+    )
+
+
+@app.put(
+    "/admin/settings/{key}",
+    response_model=SettingOut,
+    dependencies=[AdminGuard],
+)
+async def put_platform_setting(
+    key: str,
+    body: SettingIn,
+    session: AsyncSession = Depends(get_session),
+    x_admin_user: Annotated[str | None, Header(alias="X-Admin-User")] = None,
+):
+    """Insert or update a single setting and return the new row.
+
+    The optional ``X-Admin-User`` header is recorded as the editor for
+    audit; the Manager Bot passes the admin's Telegram user-id there.
+    """
+    row = await set_setting(session, key, body.value, updated_by=x_admin_user)
+    fire(
+        "platform_setting_changed",
+        {"key": key, "updated_by": x_admin_user},
+    )
+    return SettingOut(
+        key=row.key,
+        value=row.value,
+        updated_at=row.updated_at.isoformat() if row.updated_at else None,
+        updated_by=row.updated_by,
+    )
+
+
+@app.delete("/admin/settings/{key}", dependencies=[AdminGuard])
+async def delete_platform_setting(
+    key: str,
+    session: AsyncSession = Depends(get_session),
+):
+    """Remove a setting (so its value falls back to the bot's hard-coded default)."""
+    deleted = await delete_setting(session, key)
+    if not deleted:
+        raise HTTPException(404, f"Setting {key!r} not found")
+    fire("platform_setting_deleted", {"key": key})
+    return {"deleted": True, "key": key}

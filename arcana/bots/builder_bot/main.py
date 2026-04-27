@@ -37,6 +37,7 @@ import os
 import sys
 import time
 from collections import defaultdict
+from datetime import UTC, datetime
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.exceptions import TelegramBadRequest
@@ -84,6 +85,10 @@ from arcana.identity import (
     unlink_phone,
 )
 from arcana.services.broadcast import broadcast_text
+from arcana.services.platform_settings import (
+    KEY_WELCOME_MESSAGE,
+    get_setting,
+)
 
 # ─────────────── Config ───────────────
 
@@ -289,13 +294,21 @@ def crystals_for(tokens: int) -> int:
 
 @router.message(CommandStart())
 async def cmd_start(message: Message) -> None:
-    """Show the welcome screen with role, balance, and a hint to /help."""
+    """Show the welcome screen with role, balance, and a hint to /help.
+
+    If the platform admin has set a custom welcome message via the
+    Manager Bot's ``/setwelcome`` command, that message is *prepended*
+    to the standard status card (so admins can put marketing copy /
+    onboarding instructions on top without losing the role + balance
+    info users actually need).
+    """
     lang = await _lang_for(message)
     user_id = tg_user_id(message)
     is_admin = _is_admin(user_id)
     balance = await get_balance(user_id)
     async with AsyncSessionLocal() as session:
         verified = await is_phone_verified(session, user_id)
+        custom_welcome = await get_setting(session, KEY_WELCOME_MESSAGE)
 
     role = t("role_admin", lang) if is_admin else t("role_user", lang)
     verified_label = (
@@ -303,18 +316,21 @@ async def cmd_start(message: Message) -> None:
     )
     exempt = t("exempt_marker", lang) if is_admin else ""
 
-    await message.answer(
-        t(
-            "start_welcome",
-            lang,
-            role=role,
-            verified=verified_label,
-            balance=balance,
-            rate=TOKENS_PER_CRYSTAL,
-            exempt=exempt,
-        ),
-        parse_mode="HTML",
+    standard = t(
+        "start_welcome",
+        lang,
+        role=role,
+        verified=verified_label,
+        balance=balance,
+        rate=TOKENS_PER_CRYSTAL,
+        exempt=exempt,
     )
+    if custom_welcome:
+        body = f"{custom_welcome}\n\n{standard}"
+    else:
+        body = standard
+
+    await message.answer(body, parse_mode="HTML")
 
 
 @router.message(Command("help"))
@@ -681,8 +697,17 @@ async def on_my_chat_member(event: ChatMemberUpdated) -> None:
     Telegram delivers a ``my_chat_member`` update whenever the bot's
     membership in a chat changes; for private chats that means the user
     either started/un-blocked us (status ``member``) or stopped/blocked
-    us (status ``kicked``). We fire a typed event so the Manager Bot can
-    notify the admin and the broadcast service can skip dead chats.
+    us (status ``kicked``). We:
+
+    * persist the new state to ``users.is_blocked`` so the broadcast
+      service can skip dead chats *before* hitting Telegram (saves the
+      per-bot global rate-limit budget);
+    * fire a typed event so the Manager Bot notifies the admin in real
+      time.
+
+    Writes are best-effort: if the user has never opened the bot before
+    we still create the row (keyed by ``tg-{id}``) so the block state
+    isn't lost.
     """
     if event.chat.type != "private":
         return
@@ -691,26 +716,41 @@ async def on_my_chat_member(event: ChatMemberUpdated) -> None:
     old_status = event.old_chat_member.status
     if old_status == new_status:
         return
-    if new_status == "kicked":
-        fire(
-            "user_blocked_bot",
-            {
-                "user_id": user_id,
-                "telegram_user_id": event.from_user.id,
-                "username": event.from_user.username,
-                "source": "builder_bot",
-            },
-        )
-    elif new_status == "member" and old_status == "kicked":
-        fire(
-            "user_unblocked_bot",
-            {
-                "user_id": user_id,
-                "telegram_user_id": event.from_user.id,
-                "username": event.from_user.username,
-                "source": "builder_bot",
-            },
-        )
+
+    blocked = new_status == "kicked"
+    unblocked = new_status == "member" and old_status == "kicked"
+    if not (blocked or unblocked):
+        return
+
+    try:
+        async with AsyncSessionLocal() as session:
+            user = await session.get(User, user_id)
+            if user is None:
+                # Edge case: chat-member update arrives before the user
+                # ever sent a message. Create a minimal row so the
+                # block-state isn't dropped on the floor.
+                user = User(id=user_id, is_blocked=blocked)
+                if blocked:
+                    user.blocked_at = datetime.now(UTC)
+                session.add(user)
+            else:
+                user.is_blocked = blocked
+                user.blocked_at = datetime.now(UTC) if blocked else None
+            await session.commit()
+    except Exception:  # noqa: BLE001
+        log.exception("could not persist block-state for %s", user_id)
+        # Continue to fire the event so admins still see the change.
+
+    event_name = "user_blocked_bot" if blocked else "user_unblocked_bot"
+    fire(
+        event_name,
+        {
+            "user_id": user_id,
+            "telegram_user_id": event.from_user.id,
+            "username": event.from_user.username,
+            "source": "builder_bot",
+        },
+    )
 
 
 # ─────────────── /broadcast (admin-only) ───────────────
@@ -733,11 +773,16 @@ async def cmd_broadcast(message: Message) -> None:
         await message.answer(t("broadcast_usage", lang), parse_mode="HTML")
         return
 
-    # Collect every verified user that has a Telegram numeric id.
+    # Collect every verified, non-blocked user that has a Telegram numeric id.
+    # Filtering ``is_blocked`` here saves the broadcast service from
+    # spending its rate-limit budget on chats Telegram will reject anyway.
     async with AsyncSessionLocal() as session:
         rows = (
             await session.execute(
-                sa_select(User.id).where(User.phone_verified_at.is_not(None))
+                sa_select(User.id).where(
+                    User.phone_verified_at.is_not(None),
+                    User.is_blocked.is_(False),
+                )
             )
         ).all()
     recipients: list[int] = []
@@ -752,8 +797,24 @@ async def cmd_broadcast(message: Message) -> None:
         await message.answer(t("broadcast_no_recipients", lang))
         return
 
+    async def _mark_blocked(tg_id: int) -> None:
+        """Persist Telegram's "user blocked the bot" signal so future
+        broadcasts skip this chat without retrying."""
+        canonical = f"tg-{tg_id}"
+        try:
+            async with AsyncSessionLocal() as session:
+                u = await session.get(User, canonical)
+                if u is not None and not u.is_blocked:
+                    u.is_blocked = True
+                    u.blocked_at = datetime.now(UTC)
+                    await session.commit()
+        except Exception:  # noqa: BLE001
+            log.warning("could not flag %s as blocked after broadcast failure", canonical)
+
     await message.answer(t("broadcast_started", lang, count=len(recipients)))
-    result = await broadcast_text(bot, recipients, body, parse_mode="HTML")
+    result = await broadcast_text(
+        bot, recipients, body, parse_mode="HTML", on_blocked=_mark_blocked
+    )
     fire(
         "broadcast_completed",
         {

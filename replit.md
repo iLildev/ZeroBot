@@ -209,3 +209,83 @@ fit Arcana's architecture (skipping its MongoDB/Russian-UI assumptions):
 - `tests/test_broadcast_service.py` (7 tests) — success, blocked +
   callback, FloodWait retry, generic API errors, progress callback,
   async-iterable input.
+
+## Wave 2 — Manybot-inspired admin features (April 2026)
+
+Wave 2 builds on Wave 1's middleware foundation to give the platform
+admin proper tooling around the user base. None of it required a new
+service; the work is split between a tiny new persistence helper, a
+few admin-console endpoints, and updates to both bots.
+
+### Schema additions (no Alembic — `Base.metadata.create_all`)
+
+- `users.is_blocked` (`Boolean`, server default `false`) +
+  `users.blocked_at` (`DateTime UTC`) — populated from the
+  `my_chat_member` handler whenever Telegram tells us a user
+  blocked/un-blocked the Builder Bot.
+- New `platform_settings` table (`key TEXT PK`, `value TEXT`,
+  `updated_at`, `updated_by`) — single home for admin-tunable knobs.
+
+### New service — `arcana/services/platform_settings.py`
+
+Thin async helper around the new table: `get_setting(session, key)`,
+`set_setting(session, key, value, updated_by=None)` (upsert),
+`delete_setting(session, key)`, `list_settings(session)`. Exports
+`KEY_WELCOME_MESSAGE = "welcome_message"` so both bots reference the
+same constant and can never drift apart.
+
+### Admin-console (FastAPI) changes
+
+- `GET /admin/users` now returns a `UserListPage` (`items`, `total`,
+  `limit`, `offset`) and accepts `limit` (1–500), `offset`, and a
+  case-insensitive `search` substring filter. Each row includes
+  `is_blocked` + `blocked_at`.
+- `GET /admin/stats` adds `users_verified`, `users_blocked`,
+  `users_today`, `users_this_week` (all UTC, week = past 7 days).
+- New `/admin/settings` surface: `GET` lists all, `GET /{key}`
+  returns one (`404` if absent), `PUT /{key}` upserts (records the
+  optional `X-Admin-User` header as the editor for audit), `DELETE
+  /{key}` removes (`404` if absent). All emit
+  `platform_setting_changed` / `platform_setting_deleted` events.
+
+### Builder Bot updates
+
+- `/start` now reads `KEY_WELCOME_MESSAGE` from `platform_settings`
+  on every call and prepends it to the standard role/balance card.
+  No restart is required when the admin changes the welcome text.
+- `my_chat_member` handler persists `is_blocked` / `blocked_at` to
+  the DB (creating the row if needed) *before* firing
+  `user_blocked_bot` / `user_unblocked_bot` — so the broadcast
+  service can skip dead chats up-front instead of paying Telegram's
+  per-bot rate-limit cost.
+- `/broadcast` now filters `User.is_blocked.is_(False)` in SQL and
+  passes an `on_blocked` callback that flips `is_blocked=True` on
+  any users Telegram rejects mid-broadcast.
+
+### Manager Bot updates
+
+- `/users [search]` is now paginated with an inline keyboard
+  (`◀ Prev` / `Next ▶`, 10 rows/page). Each row is a tappable
+  button (`u:show:<id>`) that opens the full user-detail card.
+  `AdminFilter` was extended so it also gates `CallbackQuery`
+  updates, not just messages.
+- `/stats` shows the new verified / blocked / signups-today /
+  signups-this-week breakdown.
+- New customisation commands: `/getwelcome`, `/setwelcome <text>`,
+  `/clearwelcome` — all hit the new admin-console settings
+  endpoints with the admin's chat-id passed via `X-Admin-User`.
+
+### Test coverage added
+
+- `tests/test_platform_settings.py` (8 tests) — service round-trip,
+  overwrite semantics, audit metadata, list, delete, key constant.
+- `tests/test_admin_console_settings.py` (7 tests) — full HTTP
+  surface (PUT/GET/LIST/DELETE/404/401) against an in-memory SQLite
+  DB via `dependency_overrides`.
+- `tests/test_admin_console_pagination.py` (8 tests) —
+  `UserListPage` shape, `limit`, `offset`, `search` (case-insensitive
+  substring), no-match behaviour, auth, presence of `is_blocked`.
+- `tests/test_admin_console_stats.py` (6 tests) — verifies the four
+  new counters and that "today"/"this week" exclude back-dated rows.
+
+Total suite: **186 tests** (was 157 at end of Wave 1).

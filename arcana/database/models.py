@@ -50,6 +50,16 @@ class User(Base):
     # ``None`` means "use the bot's default language".
     language: Mapped[str | None] = mapped_column(String(8), nullable=True)
 
+    # ── Wave 2: Telegram block-state tracking ────────────────────────────
+    # ``True`` once the user has blocked / kicked the Builder Bot. The
+    # broadcast service uses this to skip dead chats *before* hitting
+    # Telegram, saving rate-limit budget. Set back to ``False`` if the
+    # user un-blocks. Defaults to ``False`` for backwards-compat.
+    is_blocked: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
+    blocked_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
     # Reverse-relations populated by SQLAlchemy on attribute access.
     bots = relationship("Bot", back_populates="owner")
     wallet = relationship("Wallet", back_populates="user", uselist=False)
@@ -139,6 +149,26 @@ class PhoneVerificationLog(Base):
     created_at: Mapped[datetime] = mapped_column(default=_utc_now)
 
     __table_args__ = (Index("ix_pv_log_user_created", "user_id", "created_at"),)
+
+
+class PlatformSetting(Base):
+    """Key-value store for platform-wide configuration (Wave 2).
+
+    Holds operator-tunable values that the bots read at runtime — most
+    notably the customizable welcome message shown by ``/start``. Kept
+    in the DB (rather than env vars) so admins can update it live from
+    the Manager Bot without restarting any service.
+
+    Values are stored as ``Text`` so callers can serialize JSON when a
+    single string isn't enough; for now everything is plain text.
+    """
+
+    __tablename__ = "platform_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(default=_utc_now, onupdate=_utc_now)
+    updated_by: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class BotFatherOperation(Base):
