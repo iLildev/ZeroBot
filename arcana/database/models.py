@@ -171,6 +171,106 @@ class PlatformSetting(Base):
     updated_by: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
+# ═══════════════════════════ Phase 1.هـ: Manybot-style growth layer ═══════════════════════════
+#
+# Four additive tables that let the platform manage subscribers, admins,
+# per-bot settings, and lightweight behavioural analytics for every
+# planted bot. None of the existing models above are touched — this
+# layer is purely additive so older code paths keep working.
+
+
+class BotSubscriber(Base):
+    """A single Telegram user who has interacted with a planted bot.
+
+    The composite primary key (``bot_id``, ``tg_user_id``) makes
+    re-registrations idempotent: the planted bot can naively call
+    ``POST /subscribers`` on every ``/start`` and we'll just update
+    ``last_seen_at`` instead of inserting a duplicate.
+    """
+
+    __tablename__ = "bot_subscribers"
+
+    bot_id: Mapped[str] = mapped_column(ForeignKey("bots.id"), primary_key=True)
+    # Stored as ``str`` so the same column can later hold non-Telegram
+    # identifiers if the platform ever supports another channel.
+    tg_user_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+
+    # The inviter's Telegram user-id, captured from ``/start ref=<id>``.
+    # ``None`` for organic visitors.
+    referrer_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    is_blocked: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
+
+    joined_at: Mapped[datetime] = mapped_column(default=_utc_now)
+    last_seen_at: Mapped[datetime] = mapped_column(default=_utc_now, onupdate=_utc_now)
+
+    __table_args__ = (
+        Index("ix_bot_subs_bot_referrer", "bot_id", "referrer_id"),
+    )
+
+
+class BotAdminRole(Base):
+    """Per-bot admin role mapping (owner | admin).
+
+    The owner is auto-seeded when the bot is created. Only the owner
+    can grant or revoke admin rights; admins can run ops commands but
+    cannot transfer ownership.
+    """
+
+    __tablename__ = "bot_admin_roles"
+
+    bot_id: Mapped[str] = mapped_column(ForeignKey("bots.id"), primary_key=True)
+    tg_user_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    # 'owner' | 'admin'
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    assigned_at: Mapped[datetime] = mapped_column(default=_utc_now)
+    assigned_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+
+class BotConfig(Base):
+    """Per-bot key/value config — most importantly the bot's audience language.
+
+    Stored as a generic key/value bag so future settings (e.g. welcome
+    text, opt-in flag) don't need a schema migration. All values are
+    plain strings; callers JSON-encode if they need structure.
+    """
+
+    __tablename__ = "bot_configs"
+
+    bot_id: Mapped[str] = mapped_column(ForeignKey("bots.id"), primary_key=True)
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(default=_utc_now, onupdate=_utc_now)
+
+
+class BotEvent(Base):
+    """Append-only behavioural event log used by the Growth Engine.
+
+    ``kind`` is one of ``'command' | 'button' | 'subscribe' | 'unsubscribe'
+    | 'broadcast' | 'invite_used'`` and ``name`` is the specific identifier
+    (e.g. command name, button label). The volume is expected to be modest
+    (planted bots generate maybe a few hundred events/day) so a simple
+    table with composite indexes is enough — no need for a TSDB.
+    """
+
+    __tablename__ = "bot_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    bot_id: Mapped[str] = mapped_column(ForeignKey("bots.id"), index=True)
+    tg_user_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=_utc_now, index=True)
+
+    __table_args__ = (
+        Index("ix_bot_events_bot_kind", "bot_id", "kind"),
+        Index("ix_bot_events_bot_name", "bot_id", "name"),
+    )
+
+
 class BotFatherOperation(Base):
     """Audit row for any operation we performed against @BotFather.
 

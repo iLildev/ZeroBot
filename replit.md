@@ -161,6 +161,57 @@ sandboxed workspace and have the Builder Agent describe it.
   collision detection, and the dispatcher's success / failure framing.
   Existing locale tests guarantee every language has the new keys.
 
+## Phase 2 — Manybot-style growth & ops layer (April 2026)
+
+A 3000-line additive expansion that turns each planted bot into a small
+audience-management product, **without touching the agent core**.
+
+- **DB** — four new tables: `BotSubscriber`, `BotAdminRole`, `BotConfig`,
+  `BotEvent`. All existing tables are untouched.
+- **Service layer** (`arcana/services/`):
+  - `subscribers.py` — register / unregister / mark blocked / stats /
+    recent / `iter_active_subscribers`.
+  - `bot_admins.py` — owner-gated `add_admin` / `remove_admin` / `list` /
+    `get_role` / `require_role` (cannot remove the owner).
+  - `bot_config.py` — `get_lang` / `set_lang` (whitelist of 19 langs) +
+    generic `get` / `set` / `all_for_bot`.
+  - `bot_invites.py` — `make_invite_link` / `parse_ref` /
+    `invites_by` / `top_inviters` (per-bot referral leaderboard).
+  - `bot_analytics.py` — `record_event` / `top_commands` / `top_buttons`
+    / `dropoff_funnel` / `suggestions`.
+  - `bot_broadcast.py` — DI-friendly broadcast that auto-marks blocked
+    subscribers and records a `broadcast` event with sent/blocked counts.
+  - `smart_defaults.seed_new_bot` — wired into orchestrator
+    `plant_bot()` so every new bot gets an `owner` row + `lang=en`.
+  - `scheduler.py` — pure-asyncio task runner (factories + interval),
+    `Scheduler.start/stop/run_once`, plus `build_default_scheduler()`
+    seeded with three 5-minute placeholder jobs.
+- **Builder Bot** — seven new commands gated by ownership/role checks:
+  `/newpost <bot_id> <text>`, `/subscribers <bot_id>`,
+  `/botlang <bot_id> <code>`, `/admins <bot_id> [add|remove] <user_id>`,
+  `/tutorials`, `/deletebot <bot_id> CONFIRM` (owner-only, calls
+  `Orchestrator.reap_bot` + `VenvManager`), `/insights <bot_id>`. New
+  `/help` section listing all seven commands, translated into all 6
+  supported languages.
+- **Smart-defaults template** (`arcana/templates/base_template/`) — the
+  freshly-planted bot now ships with `/start` (referral-aware), `/help`,
+  `/info`, an inline keyboard menu, and an `arcana_helpers.py` client
+  that POSTs subscriber/event data back to the platform when
+  `ARCANA_PLATFORM_URL` is set (silent no-op otherwise).
+- **Platform callback API** (`arcana/api/bot_platform.py`) — FastAPI app
+  with three endpoints (`POST/DELETE subscribers`, `POST events`)
+  authenticated via `X-Bot-Token` matching the bot's stored Telegram
+  token. Unknown bot ids return `401`, never `404`, to avoid leaking
+  existence.
+- **Keep-alive** — top-level `keep_alive.py` Flask app exposes `/` and
+  `/health` for external uptime monitors. Run as a sibling process, not
+  inside the bot, so a Flask error can never crash aiogram.
+- **Tests** — 11 new test modules (`test_subscribers`, `test_bot_admins`,
+  `test_bot_config`, `test_bot_invites`, `test_bot_analytics`,
+  `test_bot_broadcast`, `test_smart_defaults`, `test_bot_platform_api`,
+  `test_scheduler`, `test_keep_alive`, `test_base_template`) bring the
+  suite from 214 → 310+ green tests.
+
 ## Documentation conventions
 
 - **English** is the default language for code, docstrings, and module

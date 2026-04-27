@@ -76,6 +76,13 @@ def test_help_full_includes_core_commands_in_every_language() -> None:
         "/lang",
         "/mybots",
         "/import",
+        "/newpost",
+        "/subscribers",
+        "/insights",
+        "/botlang",
+        "/admins",
+        "/deletebot",
+        "/tutorials",
     ]
     for lang in LANGUAGES:
         text = t("help_full", lang)

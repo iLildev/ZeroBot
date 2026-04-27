@@ -165,6 +165,357 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "ru": " (без оплаты)",
         "tr": " (muaf)",
     },
+    # ── Phase 1.هـ: ops & growth commands ───────────────────────────────
+    # Generic permission/lookup errors used by several commands.
+    "bot_no_permission": {
+        "ar": "🚫 لا تملك الصلاحيات اللازمة لهذا البوت.",
+        "en": "🚫 You don't have permission for this bot.",
+        "fr": "🚫 Vous n'avez pas les droits requis pour ce bot.",
+        "es": "🚫 No tienes permisos para este bot.",
+        "ru": "🚫 У вас нет прав на этого бота.",
+        "tr": "🚫 Bu bot için yetkiniz yok.",
+    },
+    "bot_unknown": {
+        "ar": "❓ لم أتعرّف على البوت <code>{bot_id}</code>.",
+        "en": "❓ Bot <code>{bot_id}</code> not found.",
+        "fr": "❓ Bot <code>{bot_id}</code> introuvable.",
+        "es": "❓ Bot <code>{bot_id}</code> no encontrado.",
+        "ru": "❓ Бот <code>{bot_id}</code> не найден.",
+        "tr": "❓ Bot <code>{bot_id}</code> bulunamadı.",
+    },
+    # /newpost — broadcast to a planted bot's subscribers.
+    "newpost_usage": {
+        "ar": "📣 الاستخدام: <code>/newpost &lt;bot_id&gt; &lt;الرسالة&gt;</code>",
+        "en": "📣 Usage: <code>/newpost &lt;bot_id&gt; &lt;text&gt;</code>",
+        "fr": "📣 Usage : <code>/newpost &lt;bot_id&gt; &lt;texte&gt;</code>",
+        "es": "📣 Uso: <code>/newpost &lt;bot_id&gt; &lt;texto&gt;</code>",
+        "ru": "📣 Использование: <code>/newpost &lt;bot_id&gt; &lt;текст&gt;</code>",
+        "tr": "📣 Kullanım: <code>/newpost &lt;bot_id&gt; &lt;metin&gt;</code>",
+    },
+    "newpost_started": {
+        "ar": "📤 جاري إرسال الرسالة إلى المشتركين…",
+        "en": "📤 Sending the broadcast to subscribers…",
+        "fr": "📤 Envoi de la diffusion aux abonnés…",
+        "es": "📤 Enviando el mensaje a los suscriptores…",
+        "ru": "📤 Отправляю сообщение подписчикам…",
+        "tr": "📤 Yayın aboneye gönderiliyor…",
+    },
+    "newpost_done": {
+        "ar": "✅ تمّ — أُرسلت: {sent} • محظورة: {blocked} • فشلت: {failed}",
+        "en": "✅ Done — sent: {sent} • blocked: {blocked} • failed: {failed}",
+        "fr": "✅ Terminé — envoyés : {sent} • bloqués : {blocked} • échecs : {failed}",
+        "es": "✅ Listo — enviados: {sent} • bloqueados: {blocked} • fallidos: {failed}",
+        "ru": "✅ Готово — отправлено: {sent} • заблокировано: {blocked} • ошибок: {failed}",
+        "tr": "✅ Tamam — gönderildi: {sent} • engelli: {blocked} • başarısız: {failed}",
+    },
+    "newpost_failed": {
+        "ar": "❌ فشل الإرسال: {error}",
+        "en": "❌ Broadcast failed: {error}",
+        "fr": "❌ Échec de la diffusion : {error}",
+        "es": "❌ Falló el envío: {error}",
+        "ru": "❌ Рассылка не удалась: {error}",
+        "tr": "❌ Yayın başarısız: {error}",
+    },
+    # /subscribers — count + recent.
+    "subs_usage": {
+        "ar": "👥 الاستخدام: <code>/subscribers &lt;bot_id&gt;</code>",
+        "en": "👥 Usage: <code>/subscribers &lt;bot_id&gt;</code>",
+        "fr": "👥 Usage : <code>/subscribers &lt;bot_id&gt;</code>",
+        "es": "👥 Uso: <code>/subscribers &lt;bot_id&gt;</code>",
+        "ru": "👥 Использование: <code>/subscribers &lt;bot_id&gt;</code>",
+        "tr": "👥 Kullanım: <code>/subscribers &lt;bot_id&gt;</code>",
+    },
+    "subs_summary": {
+        "ar": (
+            "👥 <b>المشتركون في {bot_id}</b>\n"
+            "الإجمالي: <b>{total}</b> • النشطون: <b>{active}</b> • محظورون: <b>{blocked}</b>\n\n"
+            "<b>أحدث المشتركين:</b>\n{recent}"
+        ),
+        "en": (
+            "👥 <b>Subscribers of {bot_id}</b>\n"
+            "Total: <b>{total}</b> • Active: <b>{active}</b> • Blocked: <b>{blocked}</b>\n\n"
+            "<b>Recent joins:</b>\n{recent}"
+        ),
+        "fr": (
+            "👥 <b>Abonnés de {bot_id}</b>\n"
+            "Total : <b>{total}</b> • Actifs : <b>{active}</b> • Bloqués : <b>{blocked}</b>\n\n"
+            "<b>Derniers inscrits :</b>\n{recent}"
+        ),
+        "es": (
+            "👥 <b>Suscriptores de {bot_id}</b>\n"
+            "Total: <b>{total}</b> • Activos: <b>{active}</b> • Bloqueados: <b>{blocked}</b>\n\n"
+            "<b>Más recientes:</b>\n{recent}"
+        ),
+        "ru": (
+            "👥 <b>Подписчики {bot_id}</b>\n"
+            "Всего: <b>{total}</b> • Активных: <b>{active}</b> • Заблокировано: <b>{blocked}</b>\n\n"
+            "<b>Последние:</b>\n{recent}"
+        ),
+        "tr": (
+            "👥 <b>{bot_id} aboneleri</b>\n"
+            "Toplam: <b>{total}</b> • Aktif: <b>{active}</b> • Engelli: <b>{blocked}</b>\n\n"
+            "<b>Son katılanlar:</b>\n{recent}"
+        ),
+    },
+    "subs_recent_empty": {
+        "ar": "  لا أحد بعد — شارك رابط الدعوة لبدء النموّ!",
+        "en": "  Nobody yet — share the invite link to start growing!",
+        "fr": "  Personne pour l'instant — partagez le lien d'invitation !",
+        "es": "  Aún nadie — ¡comparte el enlace de invitación!",
+        "ru": "  Пока никого — поделитесь ссылкой-приглашением!",
+        "tr": "  Henüz kimse yok — büyümeye başlamak için davet bağlantısını paylaşın!",
+    },
+    # /botlang
+    "botlang_usage": {
+        "ar": "🌐 الاستخدام: <code>/botlang &lt;bot_id&gt; &lt;ar|en|fr|…&gt;</code>",
+        "en": "🌐 Usage: <code>/botlang &lt;bot_id&gt; &lt;ar|en|fr|…&gt;</code>",
+        "fr": "🌐 Usage : <code>/botlang &lt;bot_id&gt; &lt;ar|en|fr|…&gt;</code>",
+        "es": "🌐 Uso: <code>/botlang &lt;bot_id&gt; &lt;ar|en|fr|…&gt;</code>",
+        "ru": "🌐 Использование: <code>/botlang &lt;bot_id&gt; &lt;ar|en|fr|…&gt;</code>",
+        "tr": "🌐 Kullanım: <code>/botlang &lt;bot_id&gt; &lt;ar|en|fr|…&gt;</code>",
+    },
+    "botlang_set": {
+        "ar": "✅ تمّ ضبط لغة الجمهور للبوت <code>{bot_id}</code> إلى <b>{lang}</b>.",
+        "en": "✅ Audience language for <code>{bot_id}</code> set to <b>{lang}</b>.",
+        "fr": "✅ Langue d'audience de <code>{bot_id}</code> définie sur <b>{lang}</b>.",
+        "es": "✅ Idioma del público para <code>{bot_id}</code> establecido en <b>{lang}</b>.",
+        "ru": "✅ Язык аудитории <code>{bot_id}</code>: <b>{lang}</b>.",
+        "tr": "✅ <code>{bot_id}</code> hedef kitle dili <b>{lang}</b> olarak ayarlandı.",
+    },
+    "botlang_invalid": {
+        "ar": "❌ لغة غير مدعومة: {error}",
+        "en": "❌ Unsupported language: {error}",
+        "fr": "❌ Langue non prise en charge : {error}",
+        "es": "❌ Idioma no compatible: {error}",
+        "ru": "❌ Язык не поддерживается: {error}",
+        "tr": "❌ Desteklenmeyen dil: {error}",
+    },
+    # /admins
+    "admins_usage": {
+        "ar": (
+            "🛡️ الاستخدام:\n"
+            "<code>/admins &lt;bot_id&gt; list</code>\n"
+            "<code>/admins &lt;bot_id&gt; add &lt;tg_user_id&gt;</code>\n"
+            "<code>/admins &lt;bot_id&gt; remove &lt;tg_user_id&gt;</code>"
+        ),
+        "en": (
+            "🛡️ Usage:\n"
+            "<code>/admins &lt;bot_id&gt; list</code>\n"
+            "<code>/admins &lt;bot_id&gt; add &lt;tg_user_id&gt;</code>\n"
+            "<code>/admins &lt;bot_id&gt; remove &lt;tg_user_id&gt;</code>"
+        ),
+        "fr": (
+            "🛡️ Usage :\n"
+            "<code>/admins &lt;bot_id&gt; list</code>\n"
+            "<code>/admins &lt;bot_id&gt; add &lt;tg_user_id&gt;</code>\n"
+            "<code>/admins &lt;bot_id&gt; remove &lt;tg_user_id&gt;</code>"
+        ),
+        "es": (
+            "🛡️ Uso:\n"
+            "<code>/admins &lt;bot_id&gt; list</code>\n"
+            "<code>/admins &lt;bot_id&gt; add &lt;tg_user_id&gt;</code>\n"
+            "<code>/admins &lt;bot_id&gt; remove &lt;tg_user_id&gt;</code>"
+        ),
+        "ru": (
+            "🛡️ Использование:\n"
+            "<code>/admins &lt;bot_id&gt; list</code>\n"
+            "<code>/admins &lt;bot_id&gt; add &lt;tg_user_id&gt;</code>\n"
+            "<code>/admins &lt;bot_id&gt; remove &lt;tg_user_id&gt;</code>"
+        ),
+        "tr": (
+            "🛡️ Kullanım:\n"
+            "<code>/admins &lt;bot_id&gt; list</code>\n"
+            "<code>/admins &lt;bot_id&gt; add &lt;tg_user_id&gt;</code>\n"
+            "<code>/admins &lt;bot_id&gt; remove &lt;tg_user_id&gt;</code>"
+        ),
+    },
+    "admins_list_header": {
+        "ar": "🛡️ <b>إدارة البوت {bot_id}</b>",
+        "en": "🛡️ <b>Admins of {bot_id}</b>",
+        "fr": "🛡️ <b>Admins de {bot_id}</b>",
+        "es": "🛡️ <b>Administradores de {bot_id}</b>",
+        "ru": "🛡️ <b>Администраторы {bot_id}</b>",
+        "tr": "🛡️ <b>{bot_id} yöneticileri</b>",
+    },
+    "admins_empty": {
+        "ar": "لا يوجد مديرون مسجّلون بعد.",
+        "en": "No admins assigned yet.",
+        "fr": "Aucun admin pour l'instant.",
+        "es": "Aún no hay administradores.",
+        "ru": "Администраторов ещё нет.",
+        "tr": "Henüz yönetici yok.",
+    },
+    "admins_added": {
+        "ar": "✅ تمّت إضافة <code>{tg_user_id}</code> كمدير.",
+        "en": "✅ <code>{tg_user_id}</code> is now an admin.",
+        "fr": "✅ <code>{tg_user_id}</code> est désormais admin.",
+        "es": "✅ <code>{tg_user_id}</code> ahora es administrador.",
+        "ru": "✅ <code>{tg_user_id}</code> назначен администратором.",
+        "tr": "✅ <code>{tg_user_id}</code> artık yönetici.",
+    },
+    "admins_removed": {
+        "ar": "✅ تمّت إزالة المدير <code>{tg_user_id}</code>.",
+        "en": "✅ Removed admin <code>{tg_user_id}</code>.",
+        "fr": "✅ Admin <code>{tg_user_id}</code> retiré.",
+        "es": "✅ Admin <code>{tg_user_id}</code> eliminado.",
+        "ru": "✅ Администратор <code>{tg_user_id}</code> удалён.",
+        "tr": "✅ Yönetici <code>{tg_user_id}</code> kaldırıldı.",
+    },
+    "admins_not_found": {
+        "ar": "ℹ️ المستخدم <code>{tg_user_id}</code> ليس مديراً أصلاً.",
+        "en": "ℹ️ <code>{tg_user_id}</code> is not an admin.",
+        "fr": "ℹ️ <code>{tg_user_id}</code> n'est pas admin.",
+        "es": "ℹ️ <code>{tg_user_id}</code> no es admin.",
+        "ru": "ℹ️ <code>{tg_user_id}</code> не админ.",
+        "tr": "ℹ️ <code>{tg_user_id}</code> zaten yönetici değil.",
+    },
+    # /tutorials
+    "tutorials_text": {
+        "ar": (
+            "📖 <b>دليل البدء السريع</b>\n\n"
+            "1️⃣ <b>أنشئ بوتاً</b> — أرسل لي توكن من @BotFather وسأقوم بزرعه فوراً.\n"
+            "2️⃣ <b>برمجه بالعربية أو الإنجليزية</b> — صف ما تريد، وسأكتب الكود في صندوقك المعزول.\n"
+            "3️⃣ <b>تابع نموّه</b> — استخدم /subscribers و /insights لرؤية الإحصائيّات.\n"
+            "4️⃣ <b>راسل جمهورك</b> — استخدم /newpost لإرسال رسالة لكلّ المشتركين.\n"
+            "5️⃣ <b>شارك المسؤوليّة</b> — استخدم /admins لإضافة مديرين.\n\n"
+            "✨ نصيحة: ابدأ بشيء بسيط (مثل بوت صدى يردّد ما تكتبه)، ثمّ طوّره خطوة بخطوة."
+        ),
+        "en": (
+            "📖 <b>Quick-start tutorial</b>\n\n"
+            "1️⃣ <b>Plant a bot</b> — send me a token from @BotFather and I'll spin it up.\n"
+            "2️⃣ <b>Program it</b> in plain English or Arabic — describe what you want and I'll write the code in your sandbox.\n"
+            "3️⃣ <b>Watch it grow</b> — use /subscribers and /insights to see who's joining.\n"
+            "4️⃣ <b>Talk to your audience</b> — use /newpost to message every subscriber.\n"
+            "5️⃣ <b>Share the load</b> — use /admins to grant other Telegram users access.\n\n"
+            "✨ Tip: start tiny (e.g. an echo bot), then grow it one feature at a time."
+        ),
+        "fr": (
+            "📖 <b>Tutoriel express</b>\n\n"
+            "1️⃣ <b>Plantez un bot</b> — envoyez un token de @BotFather, je le déploie.\n"
+            "2️⃣ <b>Programmez-le</b> en français — décrivez l'idée, j'écris le code.\n"
+            "3️⃣ <b>Suivez sa croissance</b> avec /subscribers et /insights.\n"
+            "4️⃣ <b>Diffusez</b> à tous vos abonnés via /newpost.\n"
+            "5️⃣ <b>Partagez l'admin</b> avec /admins.\n\n"
+            "✨ Astuce : commencez petit, puis itérez fonctionnalité par fonctionnalité."
+        ),
+        "es": (
+            "📖 <b>Tutorial rápido</b>\n\n"
+            "1️⃣ <b>Crea un bot</b> — envíame un token de @BotFather y lo desplegaré.\n"
+            "2️⃣ <b>Prográmalo</b> en español natural — describe la idea, yo escribo el código.\n"
+            "3️⃣ <b>Mide su crecimiento</b> con /subscribers e /insights.\n"
+            "4️⃣ <b>Difunde</b> a tus suscriptores con /newpost.\n"
+            "5️⃣ <b>Comparte la administración</b> con /admins.\n\n"
+            "✨ Consejo: empieza pequeño y crece con cada iteración."
+        ),
+        "ru": (
+            "📖 <b>Краткое руководство</b>\n\n"
+            "1️⃣ <b>Создайте бота</b> — пришлите токен от @BotFather, и я подниму его.\n"
+            "2️⃣ <b>Программируйте</b> на русском или английском — опишите задачу, я напишу код.\n"
+            "3️⃣ <b>Следите за ростом</b> через /subscribers и /insights.\n"
+            "4️⃣ <b>Общайтесь с аудиторией</b> через /newpost.\n"
+            "5️⃣ <b>Делегируйте</b> через /admins.\n\n"
+            "✨ Совет: начинайте с малого, добавляйте функции постепенно."
+        ),
+        "tr": (
+            "📖 <b>Hızlı başlangıç</b>\n\n"
+            "1️⃣ <b>Bot kurun</b> — @BotFather'dan gelen token'ı bana gönderin, hemen ayağa kaldırırım.\n"
+            "2️⃣ <b>Programlayın</b> — ne istediğinizi yazın, kodu kum havuzunuzda yazarım.\n"
+            "3️⃣ <b>Büyümeyi izleyin</b> — /subscribers ve /insights komutlarını kullanın.\n"
+            "4️⃣ <b>Kitlenize ulaşın</b> — /newpost ile yayın yapın.\n"
+            "5️⃣ <b>Yetki paylaşın</b> — /admins komutu ile.\n\n"
+            "✨ İpucu: küçük başlayın, her seferinde tek bir özellik ekleyin."
+        ),
+    },
+    # /deletebot
+    "deletebot_usage": {
+        "ar": "🗑️ الاستخدام: <code>/deletebot &lt;bot_id&gt; CONFIRM</code>",
+        "en": "🗑️ Usage: <code>/deletebot &lt;bot_id&gt; CONFIRM</code>",
+        "fr": "🗑️ Usage : <code>/deletebot &lt;bot_id&gt; CONFIRM</code>",
+        "es": "🗑️ Uso: <code>/deletebot &lt;bot_id&gt; CONFIRM</code>",
+        "ru": "🗑️ Использование: <code>/deletebot &lt;bot_id&gt; CONFIRM</code>",
+        "tr": "🗑️ Kullanım: <code>/deletebot &lt;bot_id&gt; CONFIRM</code>",
+    },
+    "deletebot_done": {
+        "ar": "✅ تمّ حذف البوت <code>{bot_id}</code> وكلّ بياناته.",
+        "en": "✅ Deleted bot <code>{bot_id}</code> and all its data.",
+        "fr": "✅ Bot <code>{bot_id}</code> supprimé avec toutes ses données.",
+        "es": "✅ Bot <code>{bot_id}</code> y todos sus datos eliminados.",
+        "ru": "✅ Бот <code>{bot_id}</code> и все его данные удалены.",
+        "tr": "✅ Bot <code>{bot_id}</code> ve tüm verileri silindi.",
+    },
+    # /insights
+    "insights_usage": {
+        "ar": "📊 الاستخدام: <code>/insights &lt;bot_id&gt;</code>",
+        "en": "📊 Usage: <code>/insights &lt;bot_id&gt;</code>",
+        "fr": "📊 Usage : <code>/insights &lt;bot_id&gt;</code>",
+        "es": "📊 Uso: <code>/insights &lt;bot_id&gt;</code>",
+        "ru": "📊 Использование: <code>/insights &lt;bot_id&gt;</code>",
+        "tr": "📊 Kullanım: <code>/insights &lt;bot_id&gt;</code>",
+    },
+    "insights_template": {
+        "ar": (
+            "📊 <b>إحصائيّات النموّ — {bot_id}</b>\n\n"
+            "👥 المشتركون: <b>{subs}</b> (نشطون: {active})\n"
+            "📉 نسبة الانسحاب: <b>{dropoff}%</b>\n\n"
+            "<b>أكثر الأوامر استخداماً:</b>\n{commands}\n\n"
+            "<b>أكثر الأزرار نقراً:</b>\n{buttons}\n\n"
+            "<b>أفضل الداعين:</b>\n{inviters}\n\n"
+            "<b>اقتراحات للتحسين:</b>\n{tips}"
+        ),
+        "en": (
+            "📊 <b>Growth insights — {bot_id}</b>\n\n"
+            "👥 Subscribers: <b>{subs}</b> (active: {active})\n"
+            "📉 Drop-off: <b>{dropoff}%</b>\n\n"
+            "<b>Top commands:</b>\n{commands}\n\n"
+            "<b>Top buttons:</b>\n{buttons}\n\n"
+            "<b>Top inviters:</b>\n{inviters}\n\n"
+            "<b>Suggestions:</b>\n{tips}"
+        ),
+        "fr": (
+            "📊 <b>Croissance — {bot_id}</b>\n\n"
+            "👥 Abonnés : <b>{subs}</b> (actifs : {active})\n"
+            "📉 Abandon : <b>{dropoff}%</b>\n\n"
+            "<b>Top commandes :</b>\n{commands}\n\n"
+            "<b>Top boutons :</b>\n{buttons}\n\n"
+            "<b>Top parrains :</b>\n{inviters}\n\n"
+            "<b>Suggestions :</b>\n{tips}"
+        ),
+        "es": (
+            "📊 <b>Crecimiento — {bot_id}</b>\n\n"
+            "👥 Suscriptores: <b>{subs}</b> (activos: {active})\n"
+            "📉 Abandono: <b>{dropoff}%</b>\n\n"
+            "<b>Comandos más usados:</b>\n{commands}\n\n"
+            "<b>Botones más pulsados:</b>\n{buttons}\n\n"
+            "<b>Mejores referentes:</b>\n{inviters}\n\n"
+            "<b>Sugerencias:</b>\n{tips}"
+        ),
+        "ru": (
+            "📊 <b>Рост — {bot_id}</b>\n\n"
+            "👥 Подписчики: <b>{subs}</b> (активных: {active})\n"
+            "📉 Отток: <b>{dropoff}%</b>\n\n"
+            "<b>Топ команд:</b>\n{commands}\n\n"
+            "<b>Топ кнопок:</b>\n{buttons}\n\n"
+            "<b>Лучшие пригласители:</b>\n{inviters}\n\n"
+            "<b>Подсказки:</b>\n{tips}"
+        ),
+        "tr": (
+            "📊 <b>Büyüme — {bot_id}</b>\n\n"
+            "👥 Aboneler: <b>{subs}</b> (aktif: {active})\n"
+            "📉 Bırakma: <b>{dropoff}%</b>\n\n"
+            "<b>En çok kullanılan komutlar:</b>\n{commands}\n\n"
+            "<b>En çok tıklanan düğmeler:</b>\n{buttons}\n\n"
+            "<b>En iyi davet edenler:</b>\n{inviters}\n\n"
+            "<b>Öneriler:</b>\n{tips}"
+        ),
+    },
+    "insights_no_data": {
+        "ar": "  لا توجد بيانات بعد.",
+        "en": "  No data yet.",
+        "fr": "  Aucune donnée pour l'instant.",
+        "es": "  Aún no hay datos.",
+        "ru": "  Данных пока нет.",
+        "tr": "  Henüz veri yok.",
+    },
     # ── /help (full user guide) ──────────────────────────────────────────
     "help_full": {
         "ar": (
@@ -192,10 +543,18 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "<b>5. استيراد مشروع جاهز</b>\n"
             "/import &lt;رابط&gt; — استنساخ مشروع من GitHub أو GitLab "
             "إلى مساحة عملك ثمّ تحليله تلقائياً.\n\n"
-            "<b>6. الخصوصيّة</b>\n"
+            "<b>6. الجمهور والنموّ</b>\n"
+            "/subscribers &lt;bot_id&gt; — عدد المشتركين والقادمين الجدد\n"
+            "/newpost &lt;bot_id&gt; &lt;الرسالة&gt; — رسالة لكلّ المشتركين\n"
+            "/insights &lt;bot_id&gt; — تحليل النموّ واقتراحات\n"
+            "/botlang &lt;bot_id&gt; &lt;اللغة&gt; — لغة جمهور البوت\n"
+            "/admins &lt;bot_id&gt; … — إدارة مديرين فرعيّين\n"
+            "/deletebot &lt;bot_id&gt; CONFIRM — حذف البوت وكلّ بياناته\n"
+            "/tutorials — درس مبسّط للبدء\n\n"
+            "<b>7. الخصوصيّة</b>\n"
             "نخزّن رقم هاتفك مشفّراً (AES-GCM) للتحقّق فقط. يمكنك حذفه بالكامل "
             "في أيّ وقت بالأمر /unlink_phone.\n\n"
-            "<b>7. نصائح للحصول على نتائج أفضل</b>\n"
+            "<b>8. نصائح للحصول على نتائج أفضل</b>\n"
             '• كن واضحاً ومحدّداً (مثلاً: "أنشئ أمر /price يعرض سعر BTC من '
             'Binance" أفضل من "أضف ميزة الأسعار").\n'
             "• قسّم الطلبات الكبيرة إلى خطوات.\n"
@@ -227,10 +586,18 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "<b>5. Import an existing project</b>\n"
             "/import &lt;url&gt; — Clone a public GitHub or GitLab repo "
             "into your workspace and have me analyze it for you.\n\n"
-            "<b>6. Privacy</b>\n"
+            "<b>6. Audience &amp; growth</b>\n"
+            "/subscribers &lt;bot_id&gt; — Subscriber count + recent joins\n"
+            "/newpost &lt;bot_id&gt; &lt;text&gt; — Broadcast to subscribers\n"
+            "/insights &lt;bot_id&gt; — Growth analytics &amp; suggestions\n"
+            "/botlang &lt;bot_id&gt; &lt;code&gt; — Set the bot's audience language\n"
+            "/admins &lt;bot_id&gt; … — Manage co-admins\n"
+            "/deletebot &lt;bot_id&gt; CONFIRM — Delete the bot &amp; all its data\n"
+            "/tutorials — Quick-start onboarding guide\n\n"
+            "<b>7. Privacy</b>\n"
             "Your phone is stored encrypted (AES-GCM) and used only for "
             "verification. Delete it at any time with /unlink_phone.\n\n"
-            "<b>7. Tips for better results</b>\n"
+            "<b>8. Tips for better results</b>\n"
             '• Be specific (e.g. "add a /price command that fetches BTC from '
             'Binance" beats "add price feature").\n'
             "• Break large requests into smaller steps.\n"
@@ -262,11 +629,19 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "<b>5. Importer un projet existant</b>\n"
             "/import &lt;url&gt; — Cloner un dépôt public GitHub ou GitLab "
             "dans votre espace puis le faire analyser.\n\n"
-            "<b>6. Vie privée</b>\n"
+            "<b>6. Audience &amp; croissance</b>\n"
+            "/subscribers &lt;bot_id&gt; — Nombre d'abonnés + récents\n"
+            "/newpost &lt;bot_id&gt; &lt;texte&gt; — Diffuser à tous\n"
+            "/insights &lt;bot_id&gt; — Analyse de croissance + conseils\n"
+            "/botlang &lt;bot_id&gt; &lt;code&gt; — Langue d'audience\n"
+            "/admins &lt;bot_id&gt; … — Co-administrateurs\n"
+            "/deletebot &lt;bot_id&gt; CONFIRM — Supprimer le bot\n"
+            "/tutorials — Guide express\n\n"
+            "<b>7. Vie privée</b>\n"
             "Votre numéro est stocké chiffré (AES-GCM) et utilisé uniquement "
             "pour la vérification. Supprimez-le à tout moment avec "
             "/unlink_phone.\n\n"
-            "<b>7. Astuces</b>\n"
+            "<b>8. Astuces</b>\n"
             "• Soyez précis (« ajoute /price qui récupère BTC sur Binance » "
             "vaut mieux que « ajoute une fonctionnalité prix »).\n"
             "• Découpez les grandes demandes.\n"
@@ -298,10 +673,18 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "<b>5. Importar un proyecto existente</b>\n"
             "/import &lt;url&gt; — Clona un repo público de GitHub o GitLab "
             "en tu workspace y haz que lo analice por ti.\n\n"
-            "<b>6. Privacidad</b>\n"
+            "<b>6. Audiencia y crecimiento</b>\n"
+            "/subscribers &lt;bot_id&gt; — Suscriptores + recientes\n"
+            "/newpost &lt;bot_id&gt; &lt;texto&gt; — Enviar a todos\n"
+            "/insights &lt;bot_id&gt; — Analítica de crecimiento\n"
+            "/botlang &lt;bot_id&gt; &lt;código&gt; — Idioma del público\n"
+            "/admins &lt;bot_id&gt; … — Co-administradores\n"
+            "/deletebot &lt;bot_id&gt; CONFIRM — Eliminar el bot\n"
+            "/tutorials — Tutorial rápido\n\n"
+            "<b>7. Privacidad</b>\n"
             "Tu número se guarda cifrado (AES-GCM) y se usa solo para "
             "verificación. Elimínalo en cualquier momento con /unlink_phone.\n\n"
-            "<b>7. Consejos</b>\n"
+            "<b>8. Consejos</b>\n"
             '• Sé específico ("añade /price que obtenga BTC de Binance" es '
             'mejor que "añade función de precios").\n'
             "• Divide peticiones grandes.\n"
@@ -333,10 +716,18 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "<b>5. Импорт готового проекта</b>\n"
             "/import &lt;url&gt; — клонировать публичный репозиторий GitHub "
             "или GitLab в рабочее пространство и попросить меня проанализировать его.\n\n"
-            "<b>6. Приватность</b>\n"
+            "<b>6. Аудитория и рост</b>\n"
+            "/subscribers &lt;bot_id&gt; — подписчики и новые\n"
+            "/newpost &lt;bot_id&gt; &lt;текст&gt; — рассылка всем\n"
+            "/insights &lt;bot_id&gt; — аналитика роста + советы\n"
+            "/botlang &lt;bot_id&gt; &lt;код&gt; — язык аудитории\n"
+            "/admins &lt;bot_id&gt; … — соадминистраторы\n"
+            "/deletebot &lt;bot_id&gt; CONFIRM — удалить бота\n"
+            "/tutorials — краткое руководство\n\n"
+            "<b>7. Приватность</b>\n"
             "Ваш номер хранится в зашифрованном виде (AES-GCM) и используется "
             "только для проверки. Удалить его — /unlink_phone.\n\n"
-            "<b>7. Советы</b>\n"
+            "<b>8. Советы</b>\n"
             '• Будьте конкретны ("добавь /price, который берёт BTC с '
             'Binance" лучше, чем "добавь функцию цен").\n'
             "• Разбивайте крупные задачи на шаги.\n"
@@ -368,11 +759,19 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "<b>5. Mevcut bir projeyi içe aktar</b>\n"
             "/import &lt;url&gt; — Herkese açık bir GitHub veya GitLab deposunu "
             "çalışma alanınıza klonlayıp benim için analiz ettirin.\n\n"
-            "<b>6. Gizlilik</b>\n"
+            "<b>6. Kitle &amp; büyüme</b>\n"
+            "/subscribers &lt;bot_id&gt; — Aboneler ve son katılanlar\n"
+            "/newpost &lt;bot_id&gt; &lt;metin&gt; — Aboneye yayın\n"
+            "/insights &lt;bot_id&gt; — Büyüme analizi + öneriler\n"
+            "/botlang &lt;bot_id&gt; &lt;kod&gt; — Hedef kitle dili\n"
+            "/admins &lt;bot_id&gt; … — Yardımcı yöneticiler\n"
+            "/deletebot &lt;bot_id&gt; CONFIRM — Botu sil\n"
+            "/tutorials — Hızlı başlangıç\n\n"
+            "<b>7. Gizlilik</b>\n"
             "Telefon numaranız şifreli (AES-GCM) saklanır ve yalnızca "
             "doğrulama için kullanılır. Dilediğiniz zaman /unlink_phone ile "
             "silebilirsiniz.\n\n"
-            "<b>7. Daha iyi sonuçlar için ipuçları</b>\n"
+            "<b>8. Daha iyi sonuçlar için ipuçları</b>\n"
             '• Net olun ("Binance\'tan BTC fiyatı çeken /price komutu ekle" '
             'ifadesi "fiyat özelliği ekle"den daha iyidir).\n'
             "• Büyük istekleri parçalara bölün.\n"

@@ -1,0 +1,129 @@
+You are working on an existing Telegram Bot Builder project that already includes an agent system.
+
+DO NOT rebuild the project or modify the core architecture.
+Only extend the system by adding new modular command handlers and lightweight infrastructure features.
+
+---
+
+CORE COMMAND FEATURES:
+
+1. /newpost
+- Send a broadcast message to all subscribers of the current bot
+- Use existing subscriber storage system
+- Ensure rate limiting for Telegram API safety
+- Must support safe batch sending
+
+2. /subscribers
+- Return total number of subscribers for the current bot
+- Optionally list recent subscribers if available
+
+3. /botlang
+- Set the language of a specific bot (NOT the user interface language)
+- Defines the target audience language of the bot itself
+- Example: Arabic, English, Russian bots
+- Each bot instance must store its own language independently
+- Default is English if not set
+
+4. /admins
+- Manage bot administrators
+- Roles: owner, admin
+- Only owner can add/remove admins
+- Enforce permission checks
+
+5. /tutorials
+- Display onboarding instructions for using the bot builder system
+- Static help content only
+
+6. /deletebot
+- Delete current bot instance
+- Must also remove all related data:
+  - subscribers
+  - settings
+  - admins
+- Must include authorization check
+
+7. /help
+- Display all available commands clearly grouped and readable
+
+---
+
+GROWTH & INTELLIGENCE FEATURES:
+
+8. Invite System (Growth Loop)
+- Generate unique invite links per bot (e.g. /start?ref=bot_id)
+- Track referral source for each subscriber
+- Store inviter relationship per bot
+- Track number of successful invites per bot
+- Used for growth analytics and viral tracking
+
+---
+
+9. Smart Defaults System
+- Automatically generate a working bot setup on creation
+- Must include:
+  - default /start message
+  - simple welcome flow
+  - basic menu (Help / Start / Info buttons)
+- Bots must NOT start empty; must be usable immediately after creation
+
+---
+
+10. Growth Engine (Lightweight Analytics Layer)
+- Track basic user interactions per bot:
+  - most used commands
+  - most clicked buttons
+  - user drop-off points
+- Generate simple improvement suggestions:
+  - low engagement buttons
+  - weak onboarding flow
+- This is a passive analytics + suggestion system (NOT full AI)
+
+---
+
+SYSTEM INFRASTRUCTURE:
+
+11. Keep Alive Service (Replit Compatible)
+
+- Create a separate file named keep_alive.py
+- Implement a lightweight Flask server
+- Expose endpoint:
+  - "/" or "/health" returning status OK
+- This is used with external uptime monitoring services to keep the project responsive
+
+---
+
+Background Internal Tasks:
+- Implement a lightweight internal scheduler (async or threaded)
+- Run periodic tasks every 5 minutes (300 seconds)
+- Tasks include:
+  - cleaning inactive sessions
+  - updating analytics
+  - processing queued operations (broadcasts, retries)
+- Must NOT block main bot execution
+
+---
+
+ARCHITECTURE RULES:
+- DO NOT modify core agent logic
+- DO NOT change database schema unless absolutely necessary
+- Each feature must be implemented as an isolated module/command handler
+- Reuse existing bot, subscriber, and admin systems
+- Keep system modular, lightweight, and maintainable
+- Avoid tight coupling between features
+- No heavy AI dependencies required
+- Ensure compatibility with Replit free hosting limitations
+
+---
+
+GOAL:
+Extend the existing Telegram Bot Builder platform into a system that includes:
+- core bot builder commands
+- viral growth mechanisms
+- smart default onboarding
+- lightweight behavioral analytics
+- minimal infrastructure keep-alive support
+
+The system should behave like a Manybot-style builder enhanced with:
+- growth loop
+- auto-setup bots
+- simple self-improvement suggestions

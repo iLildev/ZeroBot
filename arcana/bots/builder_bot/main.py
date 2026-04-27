@@ -84,6 +84,14 @@ from arcana.identity import (
     record_phone_verification,
     unlink_phone,
 )
+from arcana.services import (
+    bot_admins,
+    bot_analytics,
+    bot_broadcast,
+    bot_config,
+    bot_invites,
+    subscribers,
+)
 from arcana.services.broadcast import broadcast_text
 from arcana.services.platform_settings import (
     KEY_WELCOME_MESSAGE,
@@ -576,6 +584,350 @@ async def cmd_setabout(message: Message) -> None:
         await message.answer(t("setabout_usage", lang), parse_mode="HTML")
         return
     await _apply_profile_update(message, lang, args[0], short_description=args[1].strip())
+
+
+# ─────────────── Phase 1.هـ: ops & growth (per-bot) ──────────────────
+
+
+def _tg_only(user_id: str) -> str:
+    """Strip the ``tg-`` prefix used by Arcana's canonical user-id format.
+
+    The new ops services (``bot_admins``, ``subscribers``, ``bot_analytics``)
+    store the *raw* Telegram user-id so they line up with what each planted
+    bot sees in ``message.from_user.id``. The Builder Bot, however, uses
+    ``tg_user_id()`` which prepends ``tg-``. This helper bridges the two.
+    """
+    return user_id[3:] if user_id.startswith("tg-") else user_id
+
+
+async def _resolve_with_role(
+    message: Message, lang: str, bot_id: str
+) -> BotModel | None:
+    """Look up a bot the caller can manage (owner *or* admin role).
+
+    Returns the ``Bot`` row, or ``None`` after sending the appropriate
+    error reply (unknown bot vs. unauthorized).
+    """
+    user_tg = _tg_only(tg_user_id(message))
+    async with AsyncSessionLocal() as session:
+        bot_row = await session.get(BotModel, bot_id)
+        if bot_row is None:
+            await message.answer(
+                t("bot_unknown", lang, bot_id=bot_id), parse_mode="HTML"
+            )
+            return None
+        role = await bot_admins.get_role(
+            session, bot_id=bot_id, tg_user_id=user_tg
+        )
+    if role is None:
+        await message.answer(t("bot_no_permission", lang))
+        return None
+    return bot_row
+
+
+@router.message(Command("newpost"))
+async def cmd_newpost(message: Message) -> None:
+    """Broadcast a message to every active subscriber of a planted bot."""
+    lang = await _lang_for(message)
+    if not await _ensure_verified(message, lang):
+        return
+    args = _split_args(message, expected=2)
+    if not args or len(args) < 2 or not args[1].strip():
+        await message.answer(t("newpost_usage", lang), parse_mode="HTML")
+        return
+    bot_id, text = args[0], args[1].strip()
+    if await _resolve_with_role(message, lang, bot_id) is None:
+        return
+    await message.answer(t("newpost_started", lang))
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await bot_broadcast.broadcast_to_subscribers(
+                session, bot_id=bot_id, text=text
+            )
+            await session.commit()
+    except bot_broadcast.BroadcastError as exc:
+        await message.answer(t("newpost_failed", lang, error=str(exc)))
+        return
+    await message.answer(
+        t(
+            "newpost_done",
+            lang,
+            sent=result.sent,
+            blocked=result.blocked,
+            failed=result.failed,
+        )
+    )
+
+
+@router.message(Command("subscribers"))
+async def cmd_subscribers(message: Message) -> None:
+    """Show subscriber counts and the most recent joiners for a planted bot."""
+    lang = await _lang_for(message)
+    if not await _ensure_verified(message, lang):
+        return
+    args = _split_args(message, expected=1)
+    if not args:
+        await message.answer(t("subs_usage", lang), parse_mode="HTML")
+        return
+    bot_id = args[0]
+    if await _resolve_with_role(message, lang, bot_id) is None:
+        return
+    async with AsyncSessionLocal() as session:
+        stats = await subscribers.stats(session, bot_id=bot_id)
+        recent = await subscribers.recent_subscribers(
+            session, bot_id=bot_id, limit=10
+        )
+    if not recent:
+        recent_block = t("subs_recent_empty", lang)
+    else:
+        recent_block = "\n".join(
+            f"  • <code>{r.tg_user_id}</code> — "
+            f"{r.joined_at.strftime('%Y-%m-%d %H:%M')}"
+            for r in recent
+        )
+    await message.answer(
+        t(
+            "subs_summary",
+            lang,
+            bot_id=bot_id,
+            total=stats.total,
+            active=stats.active,
+            blocked=stats.blocked,
+            recent=recent_block,
+        ),
+        parse_mode="HTML",
+    )
+
+
+@router.message(Command("botlang"))
+async def cmd_botlang(message: Message) -> None:
+    """Set the planted bot's audience language (used by smart-default replies)."""
+    lang = await _lang_for(message)
+    if not await _ensure_verified(message, lang):
+        return
+    args = _split_args(message, expected=2)
+    if not args or len(args) < 2 or not args[1].strip():
+        await message.answer(t("botlang_usage", lang), parse_mode="HTML")
+        return
+    bot_id, target = args[0], args[1].strip()
+    if await _resolve_with_role(message, lang, bot_id) is None:
+        return
+    try:
+        async with AsyncSessionLocal() as session:
+            applied = await bot_config.set_lang(
+                session, bot_id=bot_id, lang=target
+            )
+            await session.commit()
+    except bot_config.InvalidConfigValue as exc:
+        await message.answer(t("botlang_invalid", lang, error=str(exc)))
+        return
+    await message.answer(
+        t("botlang_set", lang, bot_id=bot_id, lang=applied), parse_mode="HTML"
+    )
+
+
+@router.message(Command("admins"))
+async def cmd_admins(message: Message) -> None:
+    """List, add, or remove co-admins for a planted bot.
+
+    Usage:
+        /admins <bot_id> list
+        /admins <bot_id> add <tg_user_id>
+        /admins <bot_id> remove <tg_user_id>
+    """
+    lang = await _lang_for(message)
+    if not await _ensure_verified(message, lang):
+        return
+    # We expect 2 (list) or 3 (add/remove) trailing tokens.
+    args = _split_args(message, expected=3)
+    if args is None:
+        # Try the 2-token "list" form.
+        args = _split_args(message, expected=2)
+    if not args or len(args) < 2:
+        await message.answer(t("admins_usage", lang), parse_mode="HTML")
+        return
+    bot_id, action = args[0], args[1].strip().lower()
+    target = args[2].strip() if len(args) >= 3 else ""
+
+    if await _resolve_with_role(message, lang, bot_id) is None:
+        return
+
+    caller_tg = _tg_only(tg_user_id(message))
+
+    if action == "list":
+        async with AsyncSessionLocal() as session:
+            rows = await bot_admins.list_admins(session, bot_id=bot_id)
+        header = t("admins_list_header", lang, bot_id=bot_id)
+        if not rows:
+            await message.answer(
+                f"{header}\n{t('admins_empty', lang)}", parse_mode="HTML"
+            )
+            return
+        body = "\n".join(
+            f"  • <code>{r.tg_user_id}</code> — {r.role}" for r in rows
+        )
+        await message.answer(f"{header}\n{body}", parse_mode="HTML")
+        return
+
+    if action in {"add", "remove"} and not target:
+        await message.answer(t("admins_usage", lang), parse_mode="HTML")
+        return
+
+    try:
+        async with AsyncSessionLocal() as session:
+            if action == "add":
+                await bot_admins.add_admin(
+                    session,
+                    bot_id=bot_id,
+                    tg_user_id=target,
+                    by_user_id=caller_tg,
+                )
+                await session.commit()
+                await message.answer(
+                    t("admins_added", lang, tg_user_id=target),
+                    parse_mode="HTML",
+                )
+            elif action == "remove":
+                removed = await bot_admins.remove_admin(
+                    session,
+                    bot_id=bot_id,
+                    tg_user_id=target,
+                    by_user_id=caller_tg,
+                )
+                await session.commit()
+                if removed:
+                    await message.answer(
+                        t("admins_removed", lang, tg_user_id=target),
+                        parse_mode="HTML",
+                    )
+                else:
+                    await message.answer(
+                        t("admins_not_found", lang, tg_user_id=target),
+                        parse_mode="HTML",
+                    )
+            else:
+                await message.answer(
+                    t("admins_usage", lang), parse_mode="HTML"
+                )
+    except bot_admins.PermissionDenied:
+        await message.answer(t("bot_no_permission", lang))
+
+
+@router.message(Command("tutorials"))
+async def cmd_tutorials(message: Message) -> None:
+    """Localized quick-start tutorial for new builders."""
+    lang = await _lang_for(message)
+    await message.answer(t("tutorials_text", lang), parse_mode="HTML")
+
+
+@router.message(Command("deletebot"))
+async def cmd_deletebot(message: Message) -> None:
+    """Delete a planted bot and all of its data. Owner-only.
+
+    Usage: ``/deletebot <bot_id> CONFIRM``. The literal ``CONFIRM`` token
+    is required as a safety guard so the destructive action can't be
+    fired by accident.
+    """
+    lang = await _lang_for(message)
+    if not await _ensure_verified(message, lang):
+        return
+    args = _split_args(message, expected=2)
+    if not args or len(args) < 2 or args[1].strip().upper() != "CONFIRM":
+        await message.answer(t("deletebot_usage", lang), parse_mode="HTML")
+        return
+    bot_id = args[0]
+    user_tg = _tg_only(tg_user_id(message))
+    async with AsyncSessionLocal() as session:
+        bot_row = await session.get(BotModel, bot_id)
+        if bot_row is None:
+            await message.answer(
+                t("bot_unknown", lang, bot_id=bot_id), parse_mode="HTML"
+            )
+            return
+        role = await bot_admins.get_role(
+            session, bot_id=bot_id, tg_user_id=user_tg
+        )
+    if role != "owner":
+        await message.answer(t("bot_no_permission", lang))
+        return
+
+    # Best-effort: stop the running process & wipe the venv. Both are
+    # imported lazily so unit tests don't need the orchestrator stack.
+    from arcana.core.orchestrator import Orchestrator
+    from arcana.isolation.venv_manager import VenvManager
+
+    async with AsyncSessionLocal() as session:
+        bot_row = await session.get(BotModel, bot_id)
+        if bot_row is None:  # pragma: no cover - races
+            await message.answer(
+                t("bot_unknown", lang, bot_id=bot_id), parse_mode="HTML"
+            )
+            return
+        with contextlib.suppress(Exception):
+            await Orchestrator(session).reap_bot(bot_id)
+        bot_path = VenvManager().get_bot_path(bot_id)
+        if bot_path.exists():
+            import shutil
+
+            shutil.rmtree(bot_path, ignore_errors=True)
+        await session.delete(bot_row)
+        await session.commit()
+    fire("bot_deleted", {"bot_id": bot_id, "actor": user_tg})
+    await message.answer(
+        t("deletebot_done", lang, bot_id=bot_id), parse_mode="HTML"
+    )
+
+
+@router.message(Command("insights"))
+async def cmd_insights(message: Message) -> None:
+    """Render the per-bot growth dashboard (subs, top commands, suggestions)."""
+    lang = await _lang_for(message)
+    if not await _ensure_verified(message, lang):
+        return
+    args = _split_args(message, expected=1)
+    if not args:
+        await message.answer(t("insights_usage", lang), parse_mode="HTML")
+        return
+    bot_id = args[0]
+    if await _resolve_with_role(message, lang, bot_id) is None:
+        return
+
+    no_data = t("insights_no_data", lang)
+    async with AsyncSessionLocal() as session:
+        funnel = await bot_analytics.dropoff_funnel(session, bot_id=bot_id)
+        cmds = await bot_analytics.top_commands(session, bot_id=bot_id, limit=5)
+        btns = await bot_analytics.top_buttons(session, bot_id=bot_id, limit=5)
+        invs = await bot_invites.top_inviters(session, bot_id=bot_id, limit=5)
+        stats = await subscribers.stats(session, bot_id=bot_id)
+        tips = await bot_analytics.suggestions(session, bot_id=bot_id)
+
+    def _bullets(items: list, label) -> str:
+        if not items:
+            return no_data
+        return "\n".join(f"  • {label(i)}" for i in items)
+
+    cmds_block = _bullets(cmds, lambda i: f"<code>{i.name}</code> ×{i.count}")
+    btns_block = _bullets(btns, lambda i: f"{i.name} ×{i.count}")
+    invs_block = _bullets(
+        invs, lambda i: f"<code>{i.inviter_id}</code> — {i.invites}"
+    )
+    tips_block = "\n".join(f"  • {tip}" for tip in tips) if tips else no_data
+
+    await message.answer(
+        t(
+            "insights_template",
+            lang,
+            bot_id=bot_id,
+            subs=stats.total,
+            active=stats.active,
+            dropoff=f"{funnel.dropoff_pct:.0f}",
+            commands=cmds_block,
+            buttons=btns_block,
+            inviters=invs_block,
+            tips=tips_block,
+        ),
+        parse_mode="HTML",
+    )
 
 
 @router.message(Command("unlink_phone"))

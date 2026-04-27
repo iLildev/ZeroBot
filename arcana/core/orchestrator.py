@@ -79,6 +79,20 @@ class Orchestrator:
         )
 
         self.session.add(bot)
+        await self.session.flush()
+
+        # 6.5 Seed platform-side defaults (owner role + audience language).
+        # Phase 1.هـ — see arcana/services/smart_defaults.py. We do this
+        # *before* commit so the whole bot creation is one atomic
+        # transaction; if seeding fails the Bot row is rolled back too.
+        from arcana.services.smart_defaults import seed_new_bot
+
+        await seed_new_bot(
+            self.session,
+            bot_id=bot_id,
+            owner_user_id=user_id,
+        )
+
         await self.session.commit()
 
         # 7. Launch the bot subprocess.
