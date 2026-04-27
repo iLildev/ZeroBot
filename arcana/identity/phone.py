@@ -9,15 +9,6 @@ We additionally store a deterministic HMAC of the E.164 form in
 
 Verification is recorded by :func:`record_phone_verification`, which
 also writes an audit row to ``phone_verification_log``.
-
-# ar: لماذا نخزّن HMAC للرقم بجانب نسخته المشفّرة؟
-# ar: لأنّنا نحتاج للبحث عن المستخدم برقمه (مثلاً لمنع تسجيل حسابَين
-# ar: بنفس الرقم) دون أن نضطرّ لفكّ تشفير كلّ صفّ في جدول المستخدمين —
-# ar: فكّ التشفير عمليّة مكلفة ويُعرّض القيم الحسّاسة في الذاكرة.
-# ar: HMAC يعطينا "بصمة" بحث ثابتة وآمنة (لا تعكس قيمة الرقم) ويصلح
-# ar: للمقارنة بـ index على عمود واحد. أمّا التشفير فيُحتفَظ به للحالات
-# ar: التي نحتاج فيها فعلاً للرقم (إعادة عرضه للمستخدم، أو إثبات
-# ar: ملكيّة في وقت لاحق).
 """
 
 from __future__ import annotations

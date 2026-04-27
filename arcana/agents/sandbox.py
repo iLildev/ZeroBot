@@ -10,16 +10,6 @@ pinned to the workspace, a minimal environment, and (on Linux) hard
 This is filesystem-level isolation, not VM-grade. It is sufficient for
 trusted users (the platform owner + invited collaborators). For untrusted
 multi-tenant use, layer namespaces / nsjail / containers in a later phase.
-
-# ar: لماذا نعتمد على عزل مستوى نظام الملفّات بدلاً من Docker مباشرةً؟
-# ar: 1. التشغيل سريع جداً (لا يوجد cold-start container) — مهمّ لجودة
-# ar:    تجربة الـ Builder Agent الذي قد ينفّذ عشرات الأوامر في الجلسة.
-# ar: 2. لا يحتاج صلاحيّات root أو ميزات kernel خاصّة — يكفي pip install.
-# ar: 3. يكفي للمستخدمين الموثوقين (مالك المنصّة وفريقه)، أمّا الاستخدام
-# ar:    العامّ غير الموثوق فسيحتاج مرحلة لاحقة بعزل namespace أو nsjail.
-# ar: مع ذلك، نطبّق دفاعاً عميقاً: نتحقّق من المسارات (path-traversal)،
-# ar: نقصّ متغيّرات البيئة (لا تسرّب لمفاتيح المضيف)، ونُلزم بحدود
-# ar: setrlimit صارمة (CPU / RAM / حجم ملف / عدد عمليّات).
 """
 
 from __future__ import annotations

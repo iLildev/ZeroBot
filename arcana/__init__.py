@@ -25,12 +25,6 @@ tests        Helper scripts used during local development.
 
 The package is laid out so each entry-point (gateway, console, bot) can be
 launched independently — see ``README.md`` for run instructions.
-
-# ar: تمّ تقسيم المشروع إلى حزم فرعية صغيرة ومتخصّصة بدلاً من ملفّات
-# ar: عملاقة، لأنّ كلّ خدمة (Gateway / Builder / Manager / Console)
-# ar: تُشغَّل في عمليّة منفصلة، فمن الأفضل أن يكون لكل مكوّن حدوده
-# ar: الواضحة بحيث لا يُحمَّل سوى ما يحتاجه فعلاً، ويسهل اختباره وتطويره
-# ar: بمعزل عن البقيّة.
 """
 
 __version__ = "0.1.0"

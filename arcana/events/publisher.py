@@ -13,13 +13,6 @@ operates in legacy unsigned mode and emits a one-time warning.
 
 Delivery is best-effort: network errors are swallowed silently so a down
 manager bot can never break the platform's API responses.
-
-# ar: لماذا نبتلع أخطاء الشبكة بدلاً من رفعها؟
-# ar: لأنّ هذه الأحداث "fire-and-forget": مهمّتها الإبلاغ عمّا حدث
-# ar: لا التحكّم بسير العمل. لو فشل المستلم (Manager Bot معطّل مثلاً)
-# ar: يجب ألّا يتسبّب ذلك في فشل عمليّة المستخدم الأصليّة (إنشاء بوت،
-# ar: شحن محفظة، إلخ). للضمانات الأقوى نستخدم endpoint مختلف وقائمة
-# ar: انتظار حقيقيّة (مرحلة لاحقة).
 """
 
 import asyncio

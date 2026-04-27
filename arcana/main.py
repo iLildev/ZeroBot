@@ -12,13 +12,6 @@ every boot. Responsibilities:
 Usage::
 
     python -m arcana.main
-
-# ar: لماذا نكتفي بهجرات إضافيّة (additive) بدلاً من Alembic كامل؟
-# ar: لأنّ المشروع لا يزال في طور النموّ السريع، والهجرات الإضافيّة
-# ar: (إضافة عمود اختياري جديد) آمنة دائماً ولا تتطلّب توقّف الخدمة.
-# ar: عند تغيير مخطّط مكسور للتوافق (rename / drop) سننتقل إلى Alembic
-# ar: في حينه. حالياً، الإبقاء على هذه الدالّة بسيطة وقابلة للتشغيل
-# ar: عند كلّ إقلاع (idempotent) يخفّض احتكاك النشر إلى الصفر.
 """
 
 import asyncio
@@ -45,6 +38,7 @@ ADDITIVE_MIGRATIONS = [
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_hash        VARCHAR(64)",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified_at TIMESTAMP",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS bot_quota         INTEGER",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS language          VARCHAR(8)",
     # Unique index on phone_hash (skipped if already present). The
     # WHERE-clause makes it a "partial unique" so multiple unverified
     # users (NULL hash) coexist without colliding.

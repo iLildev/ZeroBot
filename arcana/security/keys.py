@@ -9,14 +9,6 @@ never accidentally ship to prod.
 Key generation utility::
 
     python -c "import base64,os; print(base64.b64encode(os.urandom(32)).decode())"
-
-# ar: لماذا نسمح بمفتاح "تطوير" مشتقّ بدلاً من رفض التشغيل؟
-# ar: لأنّ تجربة المطوّر الجديد يجب أن تكون سلسة (clone → install → run)؟
-# ar: دون أن يضطر لتوليد مفاتيح يدوياً قبل أوّل تشغيل. لكن نطلق تحذيراً
-# ar: صاخباً (loud warning) في كلّ مرّة لتفادي تسرّب هذا الإعداد للإنتاج
-# ar: عن طريق الخطأ. أمّا في الإنتاج فالمفاتيح إجباريّة عبر متغيّرات
-# ar: البيئة، ويُمنَع منعاً باتّاً اعتماد مفاتيح Constants المضمَّنة في
-# ar: المستودع.
 """
 
 from __future__ import annotations

@@ -3,15 +3,6 @@
 Settings are parsed by ``pydantic-settings``; values can be overridden by an
 ``.env`` file at the project root or by real environment variables. See
 ``.env.example`` for the full set of supported keys.
-
-# ar: لماذا نضع كل الإعدادات في موضع واحد (singleton)؟
-# ar: 1. لتسهيل تتبّع كل القيم الحسّاسة في مكان واحد بدلاً من تشتيتها
-# ar:    عبر os.environ.get() متفرّقة في كل مكان.
-# ar: 2. لتمكين التحقّق المبكر (validation at import time) بحيث تفشل
-# ar:    العمليّة فوراً إذا كان متغيّر بيئي ضروري مفقوداً، بدلاً من أن
-# ar:    تنفجر عند أوّل طلب.
-# ar: 3. لجعل الاختبارات أسهل: يكفي تمرير دالّة بديلة عوضاً عن
-# ar:    تعديل البيئة كلّها.
 """
 
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse

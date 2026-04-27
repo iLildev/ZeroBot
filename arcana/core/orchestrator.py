@@ -4,16 +4,6 @@ The orchestrator is the only component that touches the database, the venv
 manager, the port registry, and the runtime manager together. Every consumer
 (the FastAPI consoles, the gateway, the manager bot) goes through it instead
 of orchestrating those services directly.
-
-# ar: لماذا تُمرَّر كل العمليّات الحسّاسة (إنشاء بوت، إيقاظه، إيقافه)
-# ar: عبر هذا المنسّق وحده؟
-# ar: لأنّ تجميع الخطوات الذرّيّة في مكان واحد يضمن الاتّساق:
-#   - الخصم من المحفظة قبل حجز المنفذ.
-#   - حجز المنفذ قبل إنشاء venv.
-#   - إنشاء venv قبل تثبيت الحزم.
-#   - حفظ سجلّ البوت في DB قبل تشغيل العمليّة.
-# ar: لو وُزِّعت هذه الخطوات على عدّة أماكن لظهرت حالات سباق (race)
-# ar: تسرّب فيها منافذ أو محافظ مشحونة بلا بوت يقابلها.
 """
 
 import json

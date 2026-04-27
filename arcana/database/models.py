@@ -46,6 +46,10 @@ class User(Base):
     # Per-user quota override; ``None`` falls back to ``settings.FREE_BOT_QUOTA``.
     bot_quota: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Preferred UI language for Telegram bots (ISO 639-1: 'ar', 'en', 'fr', …).
+    # ``None`` means "use the bot's default language".
+    language: Mapped[str | None] = mapped_column(String(8), nullable=True)
+
     # Reverse-relations populated by SQLAlchemy on attribute access.
     bots = relationship("Bot", back_populates="owner")
     wallet = relationship("Wallet", back_populates="user", uselist=False)

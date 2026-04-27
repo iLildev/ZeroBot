@@ -1,11 +1,4 @@
-"""Wallet read / write helpers — the only place that mutates crystal balances.
-
-# ar: لماذا نحصر كلّ تعديلات الرصيد في خدمة واحدة؟
-# ar: لأنّ المحفظة هي قلب فوترة المنصّة — أيّ خصم أو إضافة من أيّ مكان
-# ar: آخر سيخلق فجوة محاسبيّة. تركيز المنطق هنا يجعل من السهل لاحقاً
-# ar: إضافة سجلّ معاملات (transactions ledger)، أو قفل سطري (row-level
-# ar: locking)، أو حدود يوميّة، دون تعديل المستدعين.
-"""
+"""Wallet read / write helpers — the only place that mutates crystal balances."""
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,8 +57,7 @@ class WalletService:
         Raises :class:`InsufficientCrystalsError` (a ``RuntimeError`` subclass,
         for backwards compatibility) when the wallet can't cover the charge.
         """
-        # ar: نتحقّق من المبلغ بشكل صريح هنا لأنّ القيم السالبة ستُترجَم
-        # ar: إلى "إضافة رصيد مجّانيّة" — وهذه ثغرة فوترة محتملة.
+        # Reject negative amounts so a buggy caller can't silently top up balances.
         if amount < 0:
             raise ValueError(f"charge amount must be non-negative, got {amount}")
 
