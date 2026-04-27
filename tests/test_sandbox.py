@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from zerobot.agents.sandbox import (
+from arcana.agents.sandbox import (
     DEFAULT_BASH_TIMEOUT,
     SandboxError,
     SandboxManager,

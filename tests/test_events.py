@@ -1,6 +1,6 @@
 """Tests for the event publisher's HMAC signing helpers."""
 
-from zerobot.events.publisher import (
+from arcana.events.publisher import (
     SIGNATURE_SCHEME,
     compute_signature,
     verify_signature,

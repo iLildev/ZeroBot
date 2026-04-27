@@ -1,5 +1,5 @@
-# ZeroBot — single base image used by every service.
-# Build:  docker build -t zerobot:latest .
+# Arcana — single base image used by every service.
+# Build:  docker build -t arcana:latest .
 # Run:    docker compose up   (preferred — see docker-compose.yml)
 
 FROM python:3.11-slim AS base
@@ -27,7 +27,7 @@ WORKDIR /app
 # Install the package + its dependencies once. We copy only the metadata
 # first so this layer is cached when source changes but pyproject does not.
 COPY pyproject.toml README.md ./
-COPY zerobot ./zerobot
+COPY arcana ./arcana
 RUN pip install --upgrade pip && pip install -e .
 
 # Per-bot venvs and Builder Agent workspaces are written here at runtime.
@@ -38,4 +38,4 @@ ENV PORT=8001
 EXPOSE 8001
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["uvicorn", "zerobot.core.gateway:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["uvicorn", "arcana.core.gateway:app", "--host", "0.0.0.0", "--port", "8001"]

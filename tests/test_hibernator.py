@@ -2,7 +2,7 @@
 
 import time
 
-from zerobot.hibernation.hibernator import Hibernator
+from arcana.hibernation.hibernator import Hibernator
 
 
 def test_touch_resets_idle_timer():

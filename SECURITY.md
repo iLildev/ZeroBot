@@ -1,6 +1,6 @@
 # Security Policy
 
-Thank you for helping keep ZeroBot and its users safe.
+Thank you for helping keep Arcana and its users safe.
 
 ## Reporting a vulnerability
 
@@ -10,7 +10,7 @@ Instead, contact the maintainer privately:
 
 - Telegram: [@iLildev](https://t.me/iLildev)
 - Email (preferred for sensitive reports): file a private GitHub
-  Security Advisory at <https://github.com/iLildev/zerobot/security/advisories/new>
+  Security Advisory at <https://github.com/iLildev/arcana/security/advisories/new>
 
 We aim to:
 
@@ -20,7 +20,7 @@ We aim to:
 
 ## Supported versions
 
-ZeroBot is in early alpha (`0.x`). Only the `main` branch receives
+Arcana is in early alpha (`0.x`). Only the `main` branch receives
 security updates. Once a stable `1.0` ships, this section will be
 expanded.
 

@@ -1,7 +1,7 @@
 .PHONY: help install lint format test check bootstrap clean
 
 help:
-	@echo "ZeroBot — common targets"
+	@echo "Arcana — common targets"
 	@echo "  make install     install runtime + dev dependencies (editable)"
 	@echo "  make lint        run ruff in check mode"
 	@echo "  make format      auto-format with ruff"
@@ -14,20 +14,20 @@ install:
 	pip install -e ".[dev]"
 
 lint:
-	ruff check zerobot tests
+	ruff check arcana tests
 
 format:
-	ruff format zerobot tests
+	ruff format arcana tests
 
 test:
 	pytest
 
 check: lint
-	ruff format --check zerobot tests
+	ruff format --check arcana tests
 	pytest
 
 bootstrap:
-	python -m zerobot.main
+	python -m arcana.main
 
 clean:
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist *.egg-info

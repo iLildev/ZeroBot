@@ -1,6 +1,6 @@
-# Contributing to ZeroBot
+# Contributing to Arcana
 
-Thanks for your interest in improving ZeroBot — pull requests, bug reports,
+Thanks for your interest in improving Arcana — pull requests, bug reports,
 and design discussions are all welcome.
 
 ## Ground rules
@@ -22,7 +22,7 @@ pip install -e ".[dev]"
 cp .env.example .env
 
 # 3. Bring up Postgres locally (any 14+ instance is fine), then bootstrap.
-python -m zerobot.main
+python -m arcana.main
 ```
 
 See the **Running** section of `README.md` for how to start each individual
@@ -34,8 +34,8 @@ We use [Ruff](https://docs.astral.sh/ruff/) for both linting and formatting.
 Before opening a PR, run:
 
 ```bash
-ruff check zerobot
-ruff format zerobot
+ruff check arcana
+ruff format arcana
 ```
 
 The configuration lives under `[tool.ruff]` in `pyproject.toml`. Highlights:
@@ -59,7 +59,7 @@ Add /restart admin command to manager bot
 
 ## Adding a new tool to the Builder Agent
 
-1. Add the schema entry in `zerobot/agents/tools.py::TOOL_SCHEMAS`.
+1. Add the schema entry in `arcana/agents/tools.py::TOOL_SCHEMAS`.
 2. Implement the dispatcher branch in `execute_tool`.
 3. Make sure every filesystem access goes through `SandboxManager.resolve`
    so the sandbox boundary stays intact.

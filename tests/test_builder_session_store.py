@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from zerobot.agents.builder_agent import Session, SessionStore
+from arcana.agents.builder_agent import Session, SessionStore
 
 
 def test_get_creates_empty_session_for_new_user(tmp_path: Path):

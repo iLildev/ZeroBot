@@ -12,9 +12,9 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from zerobot.database.engine import Base
-from zerobot.database.models import Bot, User
-from zerobot.identity import (
+from arcana.database.engine import Base
+from arcana.database.models import Bot, User
+from arcana.identity import (
     PhoneError,
     check_bot_quota,
     is_linked,
@@ -28,8 +28,8 @@ from zerobot.identity import (
     unlink_phone,
     unwrap_session,
 )
-from zerobot.identity.sessions import SessionLinkError
-from zerobot.security.keys import reset_key_cache
+from arcana.identity.sessions import SessionLinkError
+from arcana.security.keys import reset_key_cache
 
 # ── normalization ─────────────────────────────────────────────────────────
 
@@ -94,8 +94,8 @@ async def test_record_phone_creates_user_and_marks_verified(db) -> None:
 @pytest.mark.asyncio
 async def test_phone_can_be_decrypted_only_with_matching_aad(db) -> None:
     """Encrypted phone is bound to the user_id via AAD."""
-    from zerobot.security.crypto import CryptoError
-    from zerobot.security.keys import get_master_cryptor
+    from arcana.security.crypto import CryptoError
+    from arcana.security.keys import get_master_cryptor
 
     async with db() as session:
         user = await record_phone_verification(session, "tg-1", "+14155551212")
@@ -203,7 +203,7 @@ async def test_session_blob_is_encrypted(db) -> None:
     """The raw row should not contain the plaintext session anywhere."""
     from sqlalchemy import select
 
-    from zerobot.database.models import BotOwnerSession
+    from arcana.database.models import BotOwnerSession
 
     async with db() as session:
         await store_session(session, "tg-1", 7, "MAGIC-PLAINTEXT-SESSION")

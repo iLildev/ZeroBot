@@ -64,8 +64,8 @@ dist/
 .ruff_cache/
 .mypy_cache/
 
-# ZeroBot — per-bot virtualenvs and Builder Agent sandbox workspaces
-zerobot/runtime_envs/*
-!zerobot/runtime_envs/.gitkeep
+# Arcana — per-bot virtualenvs and Builder Agent sandbox workspaces
+arcana/runtime_envs/*
+!arcana/runtime_envs/.gitkeep
 runtime_envs/
 

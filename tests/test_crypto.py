@@ -6,13 +6,13 @@ import os
 
 import pytest
 
-from zerobot.security.crypto import (
+from arcana.security.crypto import (
     CryptoError,
     Cryptor,
     generate_key,
     hmac_sha256,
 )
-from zerobot.security.keys import (
+from arcana.security.keys import (
     get_master_cryptor,
     get_phone_hmac_key,
     reset_key_cache,

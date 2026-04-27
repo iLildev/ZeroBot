@@ -11,14 +11,14 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from zerobot.botfather import (
+from arcana.botfather import (
     BotCommand,
     BotFatherClient,
     BotFatherError,
     fetch_bot_profile,
     update_bot_profile,
 )
-from zerobot.database.models import Base, Bot, BotFatherOperation, User
+from arcana.database.models import Base, Bot, BotFatherOperation, User
 
 pytestmark = pytest.mark.asyncio
 
@@ -56,9 +56,7 @@ def _ok(result):
 
 
 def _err(description: str, code: int = 400):
-    return httpx.Response(
-        200, json={"ok": False, "error_code": code, "description": description}
-    )
+    return httpx.Response(200, json={"ok": False, "error_code": code, "description": description})
 
 
 # ─────────────────────── Client: validation ─────────────────────────────
@@ -247,10 +245,10 @@ async def test_update_profile_partial_writes_audit(db_session, seeded_bot):
     assert bot.name == "New Name"
     # Two audit rows
     rows = (
-        await db_session.execute(
-            select(BotFatherOperation).order_by(BotFatherOperation.id)
-        )
-    ).scalars().all()
+        (await db_session.execute(select(BotFatherOperation).order_by(BotFatherOperation.id)))
+        .scalars()
+        .all()
+    )
     assert [r.op_type for r in rows] == ["set_name", "set_short_description"]
     assert all(r.success for r in rows)
 
@@ -273,9 +271,7 @@ async def test_update_profile_records_per_field_failures(db_session, seeded_bot)
         )
     assert results["name"] == "ok"
     assert results["description"].startswith("failed:")
-    rows = (
-        await db_session.execute(select(BotFatherOperation))
-    ).scalars().all()
+    rows = (await db_session.execute(select(BotFatherOperation))).scalars().all()
     success = {r.op_type: r.success for r in rows}
     assert success == {"set_name": True, "set_description": False}
 

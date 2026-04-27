@@ -2,7 +2,7 @@
 
 import time
 
-from zerobot.core.limiter import RateLimiter
+from arcana.core.limiter import RateLimiter
 
 
 def test_allows_up_to_rate_then_blocks():

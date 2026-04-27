@@ -2,7 +2,7 @@
 
 import pytest
 
-from zerobot.core.wake_buffer import WakeBuffer
+from arcana.core.wake_buffer import WakeBuffer
 
 
 @pytest.mark.asyncio
